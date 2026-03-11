@@ -14,9 +14,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, onSnapshot, updateDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- 원본 파이어베이스 설정값으로 복구 ---
         const firebaseConfig = {
             apiKey: "AIzaSyB475AzDr96EP6I7YsyZx3OjnYDMuMaq7k",
             authDomain: "diabetes-sales.firebaseapp.com",
@@ -33,7 +32,7 @@
 
         window.FB = { 
             db, auth, appId, 
-            collection, addDoc, doc, onSnapshot, updateDoc, getDocs, deleteDoc,
+            collection, addDoc, doc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit,
             signInAnonymously, onAuthStateChanged 
         };
     </script>
@@ -50,9 +49,9 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useCallback } = React;
 
-        // --- SVG 아이콘 컴포넌트 직접 정의 ---
+        // --- SVG 아이콘 컴포넌트 ---
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 search: <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>,
@@ -72,7 +71,9 @@
                 copy: <g><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></g>,
                 database: <g><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></g>,
                 edit: <g><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></g>,
-                save: <g><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></g>
+                save: <g><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></g>,
+                refresh: <g><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></g>,
+                plus: <g><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></g>
             };
             return (
                 <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -81,14 +82,8 @@
             );
         };
 
-        const ADMIN_PASSWORD = "pm1234";
-        const CATEGORIES = ["전체", "임상 데이터", "제품 브로슈어", "경쟁품 비교", "보험 가이드라인", "FAQ/Q&A"];
-
-        const INITIAL_MOCK = [
-            { title: "[임상] A약제 3상 효능 분석 요약", category: "임상 데이터", description: "주요 평가지표 및 위약군 대비 유의성 데이터 (2024)", pdfUrl: "#", pptUrl: "#" },
-            { title: "2024년형 메인 제품 종합 브로슈어", category: "제품 브로슈어", description: "전 제형 정보 포함 최신 버전 (신청 가능)", pdfUrl: "#", pptUrl: "" },
-            { title: "[교육] 효과적인 디테일링 스킬 강좌", category: "교육 영상", youtubeUrl: "https://www.youtube.com", description: "마케팅팀 권장 표준 멘트 강좌" }
-        ];
+        const ADMIN_PASSWORD = "1024"; // 관리자 비밀번호
+        const CATEGORIES = ["전체", "임상 데이터", "제품 브로슈어", "경쟁품 비교", "보험 가이드라인", "FAQ/Q&A", "교육 영상"];
 
         const App = () => {
             const [user, setUser] = useState(null);
@@ -97,12 +92,18 @@
             const [activeTab, setActiveTab] = useState("materials");
             const [messages, setMessages] = useState([]);
             const [requests, setRequests] = useState([]);
+            const [recentLogs, setRecentLogs] = useState([]);
             const [searchQuery, setSearchQuery] = useState("");
             const [selectedCategory, setSelectedCategory] = useState("전체");
             const [isAdminMode, setIsAdminMode] = useState(false);
             const [showAdminLogin, setShowAdminLogin] = useState(false);
             const [passwordInput, setPasswordInput] = useState("");
+            const [editingId, setEditingId] = useState(null);
+            
+            // 등록용 상태
+            const [formState, setFormState] = useState({ title: "", category: "임상 데이터", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "" });
             const [requestForm, setRequestForm] = useState({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
+            const [newBrochureName, setNewBrochureName] = useState(""); // 품목 관리용 상태
 
             useEffect(() => {
                 const init = setInterval(() => {
@@ -111,32 +112,36 @@
                         const { auth, signInAnonymously, onAuthStateChanged } = window.FB;
                         signInAnonymously(auth).then(() => {
                             onAuthStateChanged(auth, setUser);
-                        }).catch(err => {
-                            console.error("Login Error:", err);
-                            alert("데이터베이스 연결에 문제가 발생했습니다. 관리자에게 문의하세요.");
-                        });
+                        }).catch(err => console.error("Login Error:", err));
                     }
                 }, 500);
             }, []);
 
             useEffect(() => {
                 if (!user || !window.FB) return;
-                const { db, appId, collection, onSnapshot, addDoc } = window.FB;
+                const { db, appId, collection, onSnapshot } = window.FB;
                 const base = `/artifacts/${appId}/public/data/`;
 
                 const unsubMsg = onSnapshot(collection(db, `${base}messages`), (snap) => {
                     let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    if (data.length === 0 && !isAdminMode) {
-                        INITIAL_MOCK.forEach(m => addDoc(collection(db, `${base}messages`), { ...m, timestamp: Date.now() }));
-                    }
                     setMessages(data.sort((a,b) => b.timestamp - a.timestamp));
                 });
 
                 const unsubReq = onSnapshot(collection(db, `${base}requests`), (snap) => {
                     setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
                 });
-
+                
+                fetchRecentLogs();
                 return () => { unsubMsg(); unsubReq(); };
+            }, [user, isAdminMode]);
+
+            const fetchRecentLogs = useCallback(async () => {
+                if (!user || !window.FB || !isAdminMode) return;
+                const { db, appId, collection, getDocs, query, orderBy, limit } = window.FB;
+                const logsRef = collection(db, `/artifacts/${appId}/public/data/logs`);
+                const q = query(logsRef, orderBy("timestamp", "desc"), limit(50));
+                const snap = await getDocs(q);
+                setRecentLogs(snap.docs.map(d => ({id: d.id, ...d.data()})));
             }, [user, isAdminMode]);
 
             const logAction = async (action, target) => {
@@ -152,8 +157,8 @@
                 
                 let text = "[활동로그]\n사번,활동,대상,일시\n";
                 logSnap.docs.forEach(d => { const l = d.data(); text += `${l.empId},${l.action},"${l.target}",${l.dateString}\n`; });
-                text += "\n[브로슈어 신청]\n사번,성함,거래처,코드,사무소,품목,수량,상태\n";
-                reqSnap.docs.forEach(d => { const r = d.data(); text += `${r.empId},${r.requesterName},${r.accountName},${r.accountCode},${r.office},"${r.brochureName}",${r.quantity},${r.completed ? "완료":"대기"}\n`; });
+                text += "\n[브로슈어 신청]\n사번,성함,거래처,코드,사무소,품목,수량,상태,일시\n";
+                reqSnap.docs.forEach(d => { const r = d.data(); text += `${r.empId},${r.requesterName},${r.accountName},${r.accountCode},${r.office},"${r.brochureName}",${r.quantity},${r.completed ? "완료":"대기"},${r.dateString}\n`; });
                 return text;
             };
 
@@ -178,6 +183,23 @@
                 document.execCommand('copy');
                 document.body.removeChild(el);
                 alert("데이터가 복사되었습니다! 카톡이나 엑셀에 붙여넣기 하세요.");
+            };
+
+            const handleSaveContent = async (e) => {
+                e.preventDefault();
+                if (!window.FB) return;
+                const { db, appId, collection, addDoc, updateDoc, doc } = window.FB;
+                const data = { ...formState, timestamp: Date.now() };
+                
+                if (editingId) {
+                    await updateDoc(doc(db, `/artifacts/${appId}/public/data/messages`, editingId), data);
+                    alert("수정되었습니다.");
+                } else {
+                    await addDoc(collection(db, `/artifacts/${appId}/public/data/messages`), data);
+                    alert("등록되었습니다.");
+                }
+                setEditingId(null);
+                setFormState({ title: "", category: activeTab === "videos" ? "교육 영상" : "임상 데이터", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "" });
             };
 
             const filteredDisplay = useMemo(() => {
@@ -224,7 +246,8 @@
 
                     <main className="p-4 sm:p-6">
                         {isAdminMode ? (
-                            <div className="space-y-4">
+                            <div className="space-y-4 animate-in fade-in">
+                                {/* PM Dashboard */}
                                 <div className="bg-white p-6 rounded-3xl border border-blue-50 text-center shadow-sm">
                                     <h2 className="font-black text-lg mb-4 text-blue-600 uppercase tracking-widest"><Icon name="database" size={20} className="inline mr-2"/>PM Dashboard</h2>
                                     <div className="grid grid-cols-1 gap-2">
@@ -232,28 +255,140 @@
                                         <button onClick={copyToClipboard} className="w-full bg-slate-800 text-white py-4 rounded-2xl text-sm font-black shadow-md flex items-center justify-center gap-2"><Icon name="copy" size={18}/> 데이터 전체 복사 (모바일용)</button>
                                     </div>
                                 </div>
-                                <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
-                                    <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">최근 신청 내역</div>
-                                    <div className="divide-y max-h-[600px] overflow-y-auto no-scrollbar">
-                                        {requests.map(req => (
-                                            <div key={req.id} className={`p-5 flex items-center gap-4 transition-all ${req.completed ? 'opacity-40' : ''}`}>
-                                                <button onClick={() => window.FB.updateDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`, req.id), { completed: !req.completed })}>
-                                                    {req.completed ? <Icon name="checkCircle" size={24} className="text-green-500"/> : <Icon name="circle" size={24} className="text-slate-200"/>}
-                                                </button>
-                                                <div className={`text-left flex-1 ${req.completed ? 'line-through decoration-2' : ''}`}>
-                                                    <p className="font-black text-sm text-blue-600">{req.brochureName} ({req.quantity}부)</p>
-                                                    <p className="text-[10px] font-bold text-slate-800">거래처: {req.accountName}</p>
-                                                    <p className="text-[9px] text-slate-400 font-medium">{req.office} | MR: {req.empId}</p>
-                                                </div>
-                                                <button onClick={() => window.confirm("삭제하시겠습니까?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`, req.id))} className="text-slate-200 hover:text-red-500"><Icon name="trash" size={18}/></button>
-                                            </div>
-                                        ))}
-                                        {requests.length === 0 && <p className="p-10 text-center text-slate-300 font-bold italic">내역이 없습니다.</p>}
-                                    </div>
+
+                                {/* Admin Tabs (가로 스크롤 또는 줄바꿈 대응) */}
+                                <div className="flex flex-wrap bg-slate-200 p-1 rounded-2xl gap-1">
+                                    {['requests', 'brochures', 'materials', 'videos', 'logs'].map(t => (
+                                        <button key={t} onClick={() => { setActiveTab(t); setEditingId(null); if(t === 'logs') fetchRecentLogs(); }} className={`flex-1 min-w-[70px] py-3 px-1 text-[11px] font-black rounded-xl transition-all ${activeTab === t ? 'bg-white shadow-md text-blue-600' : 'text-slate-500'}`}>
+                                            {t === 'requests' ? '신청 내역' : t === 'brochures' ? '품목 관리' : t === 'materials' ? '자료 등록' : t === 'videos' ? '영상 등록' : '실시간 로그'}
+                                        </button>
+                                    ))}
                                 </div>
+
+                                {/* 브로슈어 품목 관리 탭 */}
+                                {activeTab === 'brochures' && (
+                                    <div className="space-y-4 animate-in fade-in">
+                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                                            <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">신청 폼에 나타날 품목 추가</h3>
+                                            <form onSubmit={async (e) => {
+                                                e.preventDefault();
+                                                if(!window.FB) return;
+                                                await window.FB.addDoc(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/messages`), {
+                                                    title: newBrochureName, category: "제품 브로슈어", description: "브로슈어 신청 전용 품목입니다.", pdfUrl: "", pptUrl: "", youtubeUrl: "", timestamp: Date.now()
+                                                });
+                                                setNewBrochureName("");
+                                                alert("품목이 추가되었습니다.");
+                                            }} className="flex gap-2">
+                                                <input className="flex-1 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="예: 24년형 메인 리플렛" value={newBrochureName} onChange={e => setNewBrochureName(e.target.value)} required />
+                                                <button type="submit" className="bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
+                                            </form>
+                                        </div>
+                                        <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
+                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">등록된 신청 품목</div>
+                                            <div className="divide-y max-h-[400px] overflow-y-auto no-scrollbar">
+                                                {messages.filter(m => m.category === "제품 브로슈어").map(item => (
+                                                    <div key={item.id} className="p-4 flex justify-between items-center text-left">
+                                                        <span className="font-bold text-sm text-slate-800">{item.title}</span>
+                                                        <button onClick={() => window.confirm("품목을 삭제하시겠습니까?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/messages`, item.id))} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash" size={18}/></button>
+                                                    </div>
+                                                ))}
+                                                {messages.filter(m => m.category === "제품 브로슈어").length === 0 && <p className="p-10 text-center text-slate-300 font-bold italic">등록된 품목이 없습니다.</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Content Entry Form (자료 및 영상 등록 탭) */}
+                                {(activeTab === 'materials' || activeTab === 'videos') && (
+                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center sm:text-left">
+                                        <h3 className="font-black text-xs mb-6 text-slate-400 uppercase tracking-widest text-center">{editingId ? "수정" : "새 콘텐츠 등록"}</h3>
+                                        <form onSubmit={handleSaveContent} className="space-y-4 text-center">
+                                            <input className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="제목" value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} required />
+                                            <select className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-center outline-none focus:border-blue-500" value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})}>
+                                                {activeTab === 'materials' ? CATEGORIES.filter(c=>c!=="전체" && c!=="교육 영상" && c!=="제품 브로슈어").map(c => <option key={c} value={c}>{c}</option>) : <option value="교육 영상">교육 영상</option>}
+                                            </select>
+                                            <textarea className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-medium h-24 text-center outline-none focus:border-blue-500" placeholder="상세 설명 (선택)" value={formState.description} onChange={e => setFormState({...formState, description: e.target.value})} />
+                                            
+                                            {activeTab === "materials" ? (
+                                                <div className="grid grid-cols-1 gap-2">
+                                                    <input className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-[10px] font-mono text-center outline-none focus:border-blue-500" placeholder="PDF 구글드라이브 링크" value={formState.pdfUrl} onChange={e => setFormState({...formState, pdfUrl: e.target.value})} />
+                                                    <input className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-[10px] font-mono text-center outline-none focus:border-blue-500" placeholder="PPT 구글드라이브 링크" value={formState.pptUrl} onChange={e => setFormState({...formState, pptUrl: e.target.value})} />
+                                                </div>
+                                            ) : (
+                                                <input className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[10px] font-mono text-center outline-none focus:border-blue-500" placeholder="YouTube URL" value={formState.youtubeUrl} onChange={e => setFormState({...formState, youtubeUrl: e.target.value})} required />
+                                            )}
+
+                                            <div className="flex gap-2 pt-2">
+                                                <button type="submit" className="flex-1 bg-blue-600 text-white font-black py-4 rounded-2xl text-sm shadow-lg flex items-center justify-center gap-2"><Icon name="save" size={18}/> {editingId ? "수정" : "등록"}</button>
+                                                {editingId && <button type="button" onClick={() => {setEditingId(null); setFormState({title: "", category: "임상 데이터", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: ""});}} className="px-8 bg-slate-100 text-slate-500 font-black rounded-2xl text-sm">취소</button>}
+                                            </div>
+                                        </form>
+
+                                        {/* 리스트 출력 (해당 탭의 성격에 맞는 것만) */}
+                                        <div className="mt-8 border-t pt-4">
+                                            <div className="font-black text-xs text-slate-400 mb-4 text-center">등록된 항목 관리</div>
+                                            <div className="divide-y max-h-[300px] overflow-y-auto no-scrollbar">
+                                                {(activeTab === 'videos' ? messages.filter(m => m.category === '교육 영상') : messages.filter(m => m.category !== '교육 영상' && m.category !== '제품 브로슈어')).map(item => (
+                                                    <div key={item.id} className="py-3 flex justify-between items-center text-left">
+                                                        <div className="flex-1 pr-2">
+                                                            <span className="text-[9px] font-black text-blue-400 uppercase">{item.category}</span>
+                                                            <p className="font-black text-slate-800 text-xs">{item.title}</p>
+                                                        </div>
+                                                        <div className="flex gap-1">
+                                                            <button onClick={() => { setEditingId(item.id); setFormState({...item}); window.scrollTo(0,0); }} className="p-2 text-slate-400 hover:text-blue-600"><Icon name="edit" size={16}/></button>
+                                                            <button onClick={() => { if(window.confirm("삭제하시겠습니까?")) window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/messages`, item.id)); }} className="p-2 text-slate-400 hover:text-red-500"><Icon name="trash" size={16}/></button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 브로슈어 신청 내역 탭 */}
+                                {activeTab === 'requests' && (
+                                    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
+                                        <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">신청 내역 리스트 (체크 시 취소선)</div>
+                                        <div className="divide-y max-h-[600px] overflow-y-auto no-scrollbar">
+                                            {requests.map(req => (
+                                                <div key={req.id} className={`p-5 flex items-center gap-4 transition-all ${req.completed ? 'opacity-40' : ''}`}>
+                                                    <button onClick={() => window.FB.updateDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`, req.id), { completed: !req.completed })}>
+                                                        {req.completed ? <Icon name="checkCircle" size={24} className="text-green-500"/> : <Icon name="circle" size={24} className="text-slate-200"/>}
+                                                    </button>
+                                                    <div className={`text-left flex-1 ${req.completed ? 'line-through decoration-slate-900 decoration-2' : ''}`}>
+                                                        <p className="font-black text-sm text-blue-600">{req.brochureName} ({req.quantity}부)</p>
+                                                        <p className="text-[10px] font-bold text-slate-800">거래처: {req.accountName}</p>
+                                                        <p className="text-[9px] text-slate-400 font-medium">{req.office} | {req.requesterName} (MR:{req.empId})</p>
+                                                    </div>
+                                                    <button onClick={() => window.confirm("삭제하시겠습니까?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`, req.id))} className="text-slate-200 hover:text-red-500"><Icon name="trash" size={18}/></button>
+                                                </div>
+                                            ))}
+                                            {requests.length === 0 && <p className="p-10 text-center text-slate-300 font-bold italic">신청 내역이 없습니다.</p>}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 실시간 로그 탭 */}
+                                {activeTab === 'logs' && (
+                                    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
+                                        <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                                            <span className="font-black text-xs text-slate-400 uppercase tracking-widest">최근 접속/활동 로그</span>
+                                            <button onClick={fetchRecentLogs} className="bg-blue-100 text-blue-600 px-3 py-1.5 rounded-xl flex items-center gap-1 text-[10px] font-black active:scale-95 transition-transform"><Icon name="refresh" size={14}/> 새로고침</button>
+                                        </div>
+                                        <div className="divide-y max-h-[600px] overflow-y-auto no-scrollbar bg-slate-900 text-green-400 font-mono text-xs p-4 space-y-2">
+                                            {recentLogs.length === 0 ? <p className="text-slate-500 italic text-center py-10">로그 데이터가 없습니다.</p> : recentLogs.map(log => (
+                                                <div key={log.id} className="pb-2 border-b border-slate-800">
+                                                    <span className="text-slate-500 text-[10px]">[{log.dateString}]</span> <br/>
+                                                    <span className="text-blue-400 font-bold">MR_{log.empId}</span> | {log.action} : {log.target}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ) : activeTab === "requests" ? (
-                            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
+                            /* 사용자 - 브로슈어 신청 */
+                            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center animate-in fade-in slide-in-from-bottom-4">
                                 <div className="text-center mb-8">
                                     <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner rotate-3 text-center"><Icon name="cart" size={32}/></div>
                                     <h2 className="text-2xl font-black text-slate-800 tracking-tight text-center">브로슈어 신청</h2>
@@ -266,7 +401,7 @@
                                     setRequestForm({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
                                 }} className="space-y-4 text-center">
                                     <select className="w-full p-4 bg-slate-50 border-2 rounded-2xl font-bold appearance-none text-center outline-none focus:border-blue-500" value={requestForm.brochureName} onChange={e => setRequestForm({...requestForm, brochureName: e.target.value})} required>
-                                        <option value="">브로슈어 품목 선택</option>
+                                        <option value="">필요한 브로슈어를 선택하세요</option>
                                         {messages.filter(m => m.category === "제품 브로슈어").map(m => <option key={m.id} value={m.title}>{m.title}</option>)}
                                     </select>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-center">
@@ -281,32 +416,35 @@
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 text-center">
                                         <input className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="신청자명" value={requestForm.requesterName} onChange={e => setRequestForm({...requestForm, requesterName: e.target.value})} required />
-                                        <input type="number" inputMode="numeric" className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="수량" value={requestForm.quantity} onChange={e => setRequestForm({...requestForm, quantity: e.target.value})} required />
+                                        <input type="number" inputMode="numeric" className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="수량(부)" value={requestForm.quantity} onChange={e => setRequestForm({...requestForm, quantity: e.target.value})} required />
                                     </div>
                                     <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="연락처 (010-0000-0000)" value={requestForm.phone} onChange={e => setRequestForm({...requestForm, phone: e.target.value})} required />
                                     <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="사무소명 (예: 강남사무소)" value={requestForm.office} onChange={e => setRequestForm({...requestForm, office: e.target.value})} required />
-                                    <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black shadow-xl shadow-blue-100 active:scale-95 transition-all text-center flex items-center justify-center gap-2"><Icon name="save" size={18}/> 등록하기</button>
+                                    <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black shadow-xl shadow-blue-100 active:scale-95 transition-all text-center flex items-center justify-center gap-2"><Icon name="save" size={18}/> 신청 등록하기</button>
                                 </form>
                             </div>
                         ) : (
-                            <div className="space-y-4 text-center">
+                            /* 사용자 - 자료실 / 교육영상 */
+                            <div className="space-y-4 text-center animate-in fade-in slide-in-from-bottom-4">
                                 <div className="relative group text-center">
                                     <Icon name="search" size={20} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-blue-500 text-center" />
                                     <input className="w-full pl-14 pr-6 py-5 bg-white rounded-[2rem] border-none shadow-sm outline-none text-sm font-black focus:ring-4 focus:ring-blue-50 transition-all text-center" placeholder="키워드 검색..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                                 </div>
-                                <div className="flex gap-2 overflow-x-auto no-scrollbar py-2 text-center">
-                                    {CATEGORIES.map(cat => (
-                                        <button key={cat} onClick={() => setSelectedCategory(cat)} className={`whitespace-nowrap px-4 py-2 rounded-2xl text-[10px] font-black transition-all text-center ${selectedCategory === cat ? "bg-slate-800 text-white shadow-lg scale-105" : "bg-white text-slate-400 border border-slate-100"}`}>
-                                            {cat}
-                                        </button>
-                                    ))}
-                                </div>
+                                {activeTab === "materials" && (
+                                    <div className="flex gap-2 overflow-x-auto no-scrollbar py-2 text-center">
+                                        {CATEGORIES.filter(c => c !== "교육 영상" && c !== "제품 브로슈어").map(cat => (
+                                            <button key={cat} onClick={() => setSelectedCategory(cat)} className={`whitespace-nowrap px-4 py-2 rounded-2xl text-[10px] font-black transition-all text-center ${selectedCategory === cat ? "bg-slate-800 text-white shadow-lg scale-105" : "bg-white text-slate-400 border border-slate-100"}`}>
+                                                {cat}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-1 gap-4 text-center">
                                     {filteredDisplay.map(item => (
                                         <div key={item.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-50 text-center active:scale-[0.98] transition-all group">
                                             <span className="text-[9px] font-black px-2 py-1 bg-blue-50 text-blue-600 rounded-md uppercase mb-2 inline-block tracking-wider text-center">{item.category}</span>
                                             <h3 className="text-lg font-black text-slate-800 mb-2 leading-tight group-hover:text-blue-600 transition-colors text-center">{item.title}</h3>
-                                            <p className="text-[12px] text-slate-400 font-medium mb-5 line-clamp-2 leading-relaxed text-center">{item.description}</p>
+                                            {item.description && <p className="text-[12px] text-slate-400 font-medium mb-5 line-clamp-2 leading-relaxed text-center">{item.description}</p>}
                                             <div className="flex gap-2 text-center">
                                                 {item.pdfUrl && <a href={item.pdfUrl} target="_blank" onClick={() => logAction("PDF 열람", item.title)} className="flex-1 bg-red-50 text-red-600 py-4 rounded-2xl text-[10px] font-black border border-red-100 text-center flex items-center justify-center gap-1"><Icon name="download" size={14}/> PDF</a>}
                                                 {item.pptUrl && <a href={item.pptUrl} target="_blank" onClick={() => logAction("PPT 열람", item.title)} className="flex-1 bg-orange-50 text-orange-600 py-4 rounded-2xl text-[10px] font-black border border-orange-100 text-center flex items-center justify-center gap-1"><Icon name="download" size={14}/> PPT</a>}
@@ -314,6 +452,7 @@
                                             </div>
                                         </div>
                                     ))}
+                                    {filteredDisplay.length === 0 && <p className="py-20 text-center text-slate-300 font-bold italic text-sm">등록된 콘텐츠가 없습니다.</p>}
                                 </div>
                             </div>
                         )}
@@ -326,7 +465,7 @@
                                 <h2 className="font-black text-lg mb-8 flex items-center justify-center gap-2 uppercase tracking-widest text-center"><Icon name="lock" size={20} className="text-blue-600"/> PM AUTH</h2>
                                 <form onSubmit={(e) => {
                                     e.preventDefault();
-                                    if (passwordInput === ADMIN_PASSWORD) { setIsAdminMode(true); setShowAdminLogin(false); setPasswordInput(""); }
+                                    if (passwordInput === ADMIN_PASSWORD) { setIsAdminMode(true); setShowAdminLogin(false); setPasswordInput(""); setActiveTab("requests"); }
                                     else alert("비밀번호 불일치");
                                 }} className="space-y-4 text-center">
                                     <input type="password" autoFocus className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-2xl font-black outline-none focus:border-blue-500 text-center" placeholder="••••" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} />
