@@ -1,430 +1,347 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, updateDoc, getDocs } from 'firebase/firestore';
-import { 
-  Search, FileText, Download, Plus, Trash2, Lock, 
-  LogOut, Youtube, Edit3, User, FileSpreadsheet, X, Save, AlertCircle, ShoppingCart, Phone, MapPin, Hash, Database, CheckCircle2, Circle, Building2, Fingerprint, Copy, Eye
-} from 'lucide-react';
-
-// --- Firebase 설정 ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'dm-team-mr-hub-final-v2';
-
-const CATEGORIES = ["전체", "임상 데이터", "제품 브로슈어", "경쟁품 비교", "보험 가이드라인", "FAQ/Q&A"];
-const ADMIN_PASSWORD = "pm1234";
-
-// --- 목업 데이터 (자동 생성) ---
-const MOCK_MATERIALS = [
-  { title: "[임상] A약제 3상 효능 분석 요약", category: "임상 데이터", description: "주요 평가지표 및 위약군 대비 유의성 데이터 (2024)", pdfUrl: "https://drive.google.com", pptUrl: "https://drive.google.com" },
-  { title: "[비교] B사 신제품 대비 우위성 포인트", category: "경쟁품 비교", description: "부작용 발현율 및 복약 순응도 상세 비교 자료", pdfUrl: "https://drive.google.com", pptUrl: "" },
-  { title: "[가이드] 24년 6월 보험 고시 개정안 안내", category: "보험 가이드라인", description: "삭감 주의사항 및 상병코드 입력 가이드라인", pdfUrl: "https://drive.google.com", pptUrl: "https://drive.google.com" },
-  { title: "2024년형 메인 제품 종합 브로슈어", category: "제품 브로슈어", description: "전 제형 정보가 포함된 최신판 브로슈어 (신청 가능)", pdfUrl: "https://drive.google.com", pptUrl: "" },
-  { title: "당뇨/고혈압 복합제 전문 리플렛", category: "제품 브로슈어", description: "복합제 처방의 근거와 환자 혜택 중심 자료 (신청 가능)", pdfUrl: "https://drive.google.com", pptUrl: "" }
-];
-
-const MOCK_VIDEOS = [
-  { title: "신제품 A 런칭 심포지엄 다시보기", category: "임상 데이터", description: "국내 최고 권위자 초빙 학술 세미나 녹화본", youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
-  { title: "효과적인 디테일링 화법 마스터링", category: "기타", description: "마케팅팀 권장 1분 핵심 메시지 전달법", youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }
-];
-
-const App = () => {
-  const [user, setUser] = useState(null);
-  const [empId, setEmpId] = useState(localStorage.getItem('mr_emp_id') || "");
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('mr_emp_id'));
-  
-  const [messages, setMessages] = useState([]);
-  const [videos, setVideos] = useState([]);
-  const [requests, setRequests] = useState([]);
-  const [activeTab, setActiveTab] = useState("materials"); 
-  
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("전체");
-  
-  const [isAdminMode, setIsAdminMode] = useState(false);
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [adminPasswordInput, setAdminPasswordInput] = useState("");
-  
-  const [editingId, setEditingId] = useState(null);
-  const [formState, setFormState] = useState({ title: "", category: "임상 데이터", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "" });
-  const [requestForm, setRequestForm] = useState({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
-  const [isLoading, setIsLoading] = useState(true);
-  const [showLogView, setShowLogView] = useState(false);
-  const [rawLogText, setRawLogText] = useState("");
-
-  // 1. Firebase Auth
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (e) { console.error("Auth error", e); }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
-  }, []);
-
-  // 2. Data Fetching & Seeding
-  useEffect(() => {
-    if (!user) return;
-    const msgRef = collection(db, 'artifacts', appId, 'public', 'data', 'messages');
-    const videoRef = collection(db, 'artifacts', appId, 'public', 'data', 'videos');
-    const reqRef = collection(db, 'artifacts', appId, 'public', 'data', 'requests');
-
-    const unsubMsg = onSnapshot(msgRef, async (snap) => {
-      let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (data.length === 0 && !isAdminMode) {
-        for (const m of MOCK_MATERIALS) { await addDoc(msgRef, { ...m, timestamp: Date.now() }); }
-        return;
-      }
-      setMessages(data.sort((a, b) => b.timestamp - a.timestamp));
-      setIsLoading(false);
-    });
-
-    const unsubVid = onSnapshot(videoRef, async (snap) => {
-      let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (data.length === 0 && !isAdminMode) {
-        for (const v of MOCK_VIDEOS) { await addDoc(videoRef, { ...v, timestamp: Date.now() }); }
-        return;
-      }
-      setVideos(data.sort((a, b) => b.timestamp - a.timestamp));
-    });
-
-    const unsubReq = onSnapshot(reqRef, (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setRequests(data.sort((a, b) => b.timestamp - a.timestamp));
-    });
-
-    return () => { unsubMsg(); unsubVid(); unsubReq(); };
-  }, [user, isAdminMode]);
-
-  // Actions
-  const logAction = async (actionType, targetTitle) => {
-    if (!empId || !user) return;
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
-        empId, action: actionType, target: targetTitle, timestamp: Date.now(),
-        dateString: new Date().toLocaleString('ko-KR')
-      });
-    } catch (e) { console.error(e); }
-  };
-
-  const toggleRequestStatus = async (requestId, currentStatus) => {
-    if (!user) return;
-    try {
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'requests', requestId);
-      await updateDoc(docRef, { completed: !currentStatus });
-    } catch (e) { console.error(e); }
-  };
-
-  // 모바일 통합 리포트 생성 로직 (CSV용)
-  const generateReportData = async () => {
-    const logSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'logs'));
-    const logs = logSnap.docs.map(d => d.data()).sort((a, b) => b.timestamp - a.timestamp);
-    const reqSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'requests'));
-    const reqs = reqSnap.docs.map(d => d.data()).sort((a, b) => b.timestamp - a.timestamp);
-
-    let content = "\uFEFF[활동 로그]\n사번,활동,대상,일시\n";
-    logs.forEach(l => content += `${l.empId},${l.action},"${l.target}",${l.dateString}\n`);
-    content += "\n[브로슈어 신청]\n사번,성함,연락처,사무소,거래처명,코드,품목,수량,일시,상태\n";
-    reqs.forEach(r => content += `${r.empId},${r.requesterName},${r.phone},${r.office},"${r.accountName}","${r.accountCode}","${r.brochureName}",${r.quantity},${r.dateString},${r.completed ? "완료" : "대기"}\n`);
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DM TEAM MR HUB</title>
+    <!-- 외부 라이브러리 (CDN) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     
-    return content;
-  };
+    <!-- Firebase SDK (v10) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, doc, onSnapshot, updateDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  // 1. 파일로 다운로드 (표준 브라우저용)
-  const handleDownloadExcel = async () => {
-    try {
-      const content = await generateReportData();
-      const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `DM_HUB_REPORT_${new Date().toISOString().slice(0,10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      alert("다운로드가 차단되었습니다. 기본 브라우저를 이용하거나 '전체 복사'를 사용하세요.");
-    }
-  };
+        // --- 원본 파이어베이스 설정값으로 복구 ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyB475AzDr96EP6I7YsyZx3OjnYDMuMaq7k",
+            authDomain: "diabetes-sales.firebaseapp.com",
+            projectId: "diabetes-sales",
+            storageBucket: "diabetes-sales.firebasestorage.app",
+            messagingSenderId: "778615949732",
+            appId: "1:778615949732:web:8783bfcb0a95ec15cbd931"
+        };
 
-  // 2. 텍스트로 복사 (모바일 클립보드용)
-  const handleCopyLogs = async () => {
-    try {
-      const content = await generateReportData();
-      // navigator.clipboard가 작동하지 않는 환경 대응
-      const textArea = document.createElement("textarea");
-      textArea.value = content;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      alert("데이터가 복사되었습니다! 카카오톡이나 메모장에 붙여넣어 확인하세요.");
-    } catch (e) { alert("복사 실패"); }
-  };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = "dm-team-mr-hub-v3"; 
 
-  // 3. 화면에 텍스트 표시 (최후의 수단)
-  const handleViewLogs = async () => {
-    const content = await generateReportData();
-    setRawLogText(content);
-    setShowLogView(true);
-  };
+        window.FB = { 
+            db, auth, appId, 
+            collection, addDoc, doc, onSnapshot, updateDoc, getDocs, deleteDoc,
+            signInAnonymously, onAuthStateChanged 
+        };
+    </script>
 
-  const filteredDisplay = useMemo(() => {
-    const list = activeTab === "materials" ? messages : videos;
-    return list.filter(i => (selectedCategory === "전체" || i.category === selectedCategory) && i.title.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [messages, videos, activeTab, selectedCategory, searchQuery]);
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        input, select, textarea { font-size: 16px !important; }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
 
-  // --- UI 컴포넌트 ---
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
 
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-6 text-center">
-        <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl">
-          <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner"><User size={40} /></div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">DM TEAM MR HUB</h1>
-          <p className="text-slate-400 text-xs mt-2 mb-8 font-bold uppercase tracking-[0.2em]">인증 후 사용 가능합니다</p>
-          <form onSubmit={(e) => { e.preventDefault(); if(/^\d{6}$/.test(empId)) { localStorage.setItem('mr_emp_id', empId); setIsLoggedIn(true); logAction("LOGIN", "시스템 접속"); } else alert("사번 6자리를 입력하세요."); }} className="space-y-6">
-            <input type="text" inputMode="numeric" pattern="\d*" maxLength={6} className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-3xl font-black tracking-[0.4em] outline-none focus:border-blue-500 focus:bg-white transition-all shadow-sm" placeholder="000000" value={empId} onChange={e => setEmpId(e.target.value)} required />
-            <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-100">입장하기</button>
-          </form>
-        </div>
-      </div>
-    );
-  }
+        // --- SVG 아이콘 컴포넌트 직접 정의 ---
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const icons = {
+                search: <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>,
+                file: <g><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" /><polyline points="13 2 13 9 20 9" /></g>,
+                download: <g><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></g>,
+                trash: <g><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></g>,
+                lock: <g><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></g>,
+                logout: <g><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></g>,
+                youtube: <g><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.33 29 29 0 00-.46-5.33z" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" /></g>,
+                user: <g><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></g>,
+                excel: <g><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><path d="M8 13h2v7H8zM12 15h2v5h-2zM16 11h2v9h-2z" /></g>,
+                cart: <g><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" /></g>,
+                checkCircle: <g><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></g>,
+                circle: <g><circle cx="12" cy="12" r="10" /></g>,
+                building: <g><rect x="4" y="2" width="16" height="20" rx="2" ry="2" /><line x1="9" y1="22" x2="9" y2="2" /><line x1="15" y1="22" x2="15" y2="2" /><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="10" x2="20" y2="10" /><line x1="4" y1="14" x2="20" y2="14" /><line x1="4" y1="18" x2="20" y2="18" /></g>,
+                finger: <g><path d="M2 12a10 10 0 0110-10" /><path d="M7 15a10 10 0 0110-10" /><path d="M12 18a10 10 0 0110-10" /><circle cx="12" cy="12" r="3" /></g>,
+                copy: <g><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></g>,
+                database: <g><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></g>,
+                edit: <g><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></g>,
+                save: <g><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></g>
+            };
+            return (
+                <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name]}
+                </svg>
+            );
+        };
 
-  return (
-    <div className="min-h-screen bg-slate-50 font-sans pb-24">
-      {/* Header */}
-      <header className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-100"><FileText size={18}/></div>
-          <span className="font-black text-lg tracking-tighter text-slate-800 uppercase">DM TEAM HUB</span>
-        </div>
-        <button onClick={() => isAdminMode ? setIsAdminMode(false) : setShowAdminLogin(true)} className={`p-2.5 rounded-2xl transition-all shadow-sm ${isAdminMode ? 'bg-red-500 text-white' : 'bg-white border text-slate-300'}`}>
-          {isAdminMode ? <LogOut size={20} /> : <Lock size={20} />}
-        </button>
-      </header>
+        const ADMIN_PASSWORD = "pm1234";
+        const CATEGORIES = ["전체", "임상 데이터", "제품 브로슈어", "경쟁품 비교", "보험 가이드라인", "FAQ/Q&A"];
 
-      {/* Navigation */}
-      {!isAdminMode && (
-        <nav className="flex bg-white border-b sticky top-[69px] z-40 p-1 shadow-sm">
-          {[
-            { id: "requests", label: "브로슈어 신청", icon: <ShoppingCart size={18}/> },
-            { id: "materials", label: "자료", icon: <FileText size={18}/> },
-            { id: "videos", label: "교육자료", icon: <Youtube size={18}/> }
-          ].map(tab => (
-            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSelectedCategory("전체"); }} className={`flex-1 py-3 text-xs font-black flex flex-col items-center gap-1 rounded-xl transition-all ${activeTab === tab.id ? "bg-blue-50 text-blue-600" : "text-slate-400"}`}>
-              {tab.icon} <span className="text-[10px]">{tab.label}</span>
-            </button>
-          ))}
-        </nav>
-      )}
+        const INITIAL_MOCK = [
+            { title: "[임상] A약제 3상 효능 분석 요약", category: "임상 데이터", description: "주요 평가지표 및 위약군 대비 유의성 데이터 (2024)", pdfUrl: "#", pptUrl: "#" },
+            { title: "2024년형 메인 제품 종합 브로슈어", category: "제품 브로슈어", description: "전 제형 정보 포함 최신 버전 (신청 가능)", pdfUrl: "#", pptUrl: "" },
+            { title: "[교육] 효과적인 디테일링 스킬 강좌", category: "교육 영상", youtubeUrl: "https://www.youtube.com", description: "마케팅팀 권장 표준 멘트 강좌" }
+        ];
 
-      <main className="max-w-xl mx-auto p-4 sm:p-6">
-        {isAdminMode ? (
-          /* --- PM 관리자 화면 --- */
-          <div className="space-y-6 pt-2 animate-in fade-in duration-500">
-            <div className="bg-white p-6 rounded-[2rem] border border-blue-50 shadow-sm text-center">
-              <h2 className="font-black text-lg flex items-center justify-center gap-2 mb-4"><Database size={20} className="text-blue-600"/> PM Dashboard</h2>
-              
-              <div className="grid grid-cols-1 gap-2 mb-4">
-                <button onClick={handleDownloadExcel} className="w-full bg-green-600 text-white py-4 rounded-2xl text-sm font-black flex items-center justify-center gap-2 shadow-sm">
-                  <FileSpreadsheet size={18}/> 로그 엑셀 다운로드 (PC 권장)
-                </button>
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={handleCopyLogs} className="bg-slate-800 text-white py-4 rounded-2xl text-[11px] font-black flex items-center justify-center gap-2">
-                    <Copy size={16}/> 텍스트 전체 복사
-                  </button>
-                  <button onClick={handleViewLogs} className="bg-slate-100 text-slate-600 py-4 rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 border">
-                    <Eye size={16}/> 화면에서 보기
-                  </button>
-                </div>
-              </div>
-              <div className="p-3 bg-blue-50 rounded-xl text-[10px] text-blue-600 font-bold leading-relaxed">
-                📢 모바일에서 다운로드가 안 되면 '텍스트 전체 복사'를 눌러주세요.<br/>
-                복사된 내용을 카톡/메모장에 붙여넣으면 데이터 보존이 가능합니다.
-              </div>
-            </div>
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [empId, setEmpId] = useState(localStorage.getItem('mr_emp_id') || "");
+            const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('mr_emp_id'));
+            const [activeTab, setActiveTab] = useState("materials");
+            const [messages, setMessages] = useState([]);
+            const [requests, setRequests] = useState([]);
+            const [searchQuery, setSearchQuery] = useState("");
+            const [selectedCategory, setSelectedCategory] = useState("전체");
+            const [isAdminMode, setIsAdminMode] = useState(false);
+            const [showAdminLogin, setShowAdminLogin] = useState(false);
+            const [passwordInput, setPasswordInput] = useState("");
+            const [requestForm, setRequestForm] = useState({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
 
-            <div className="flex bg-slate-200 p-1 rounded-2xl">
-              {['materials', 'videos', 'requests'].map(t => (
-                <button key={t} onClick={() => { setActiveTab(t); setEditingId(null); }} className={`flex-1 py-3 text-[11px] font-black rounded-xl transition-all ${activeTab === t ? 'bg-white shadow-md text-blue-600' : 'text-slate-500'}`}>
-                  {t === 'materials' ? '자료 관리' : t === 'videos' ? '영상 관리' : '신청 내역'}
-                </button>
-              ))}
-            </div>
+            useEffect(() => {
+                const init = setInterval(() => {
+                    if (window.FB) {
+                        clearInterval(init);
+                        const { auth, signInAnonymously, onAuthStateChanged } = window.FB;
+                        signInAnonymously(auth).then(() => {
+                            onAuthStateChanged(auth, setUser);
+                        }).catch(err => {
+                            console.error("Login Error:", err);
+                            alert("데이터베이스 연결에 문제가 발생했습니다. 관리자에게 문의하세요.");
+                        });
+                    }
+                }, 500);
+            }, []);
 
-            {/* List Management */}
-            <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm">
-              <div className="divide-y max-h-[600px] overflow-y-auto">
-                {(activeTab === 'requests' ? requests : activeTab === 'materials' ? messages : videos).map(item => (
-                  <div key={item.id} className={`p-5 flex justify-between items-start transition-all ${item.completed ? 'opacity-40' : ''}`}>
-                    <div className="flex-1 flex gap-3 text-left">
-                      {activeTab === 'requests' && (
-                        <button onClick={() => toggleRequestStatus(item.id, item.completed)} className="mt-1">
-                          {item.completed ? <CheckCircle2 size={24} className="text-green-500 fill-green-50" /> : <Circle size={24} className="text-slate-200" />}
-                        </button>
-                      )}
-                      <div className={activeTab === 'requests' && item.completed ? 'line-through text-slate-400 decoration-slate-600 decoration-2' : ''}>
-                        {activeTab === 'requests' ? (
-                          <div className="text-left">
-                            <p className="font-black text-sm text-blue-600">{item.brochureName} ({item.quantity}부)</p>
-                            <p className="text-[10px] font-bold text-slate-800">거래처: {item.accountName} ({item.accountCode})</p>
-                            <p className="text-[10px] text-slate-500">{item.office} | {item.requesterName} ({item.empId})</p>
-                          </div>
-                        ) : (
-                          <div className="text-left">
-                            <span className="text-[9px] font-black text-blue-400 uppercase tracking-wider block">{item.category}</span>
-                            <p className="font-black text-slate-800 text-sm leading-snug">{item.title}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-1 ml-4">
-                      <button onClick={() => { if(window.confirm("삭제하시겠습니까?")) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', activeTab === 'requests' ? 'requests' : activeTab === 'materials' ? 'messages' : 'videos', item.id)); }} className="p-2 text-slate-200 hover:text-red-500"><Trash2 size={20}/></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* --- 사용자 모드 --- */
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            {activeTab === "requests" ? (
-              <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                <div className="text-center mb-8">
-                  <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner"><ShoppingCart size={32}/></div>
-                  <h2 className="text-2xl font-black text-slate-800">브로슈어 신청</h2>
-                  <p className="text-xs text-slate-400 mt-1 font-medium">거래처 정보를 정확히 입력하세요.</p>
-                </div>
-                <form onSubmit={async (e) => { 
-                  e.preventDefault(); 
-                  if (!user) return;
-                  await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'requests'), {...requestForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR')});
-                  await logAction("브로슈어 신청", requestForm.brochureName);
-                  alert("정상적으로 신청되었습니다.");
-                  setRequestForm({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
-                }} className="space-y-4">
-                  <select className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl outline-none text-sm font-bold focus:border-blue-500 transition-all appearance-none" value={requestForm.brochureName} onChange={e => setRequestForm({...requestForm, brochureName: e.target.value})} required>
-                    <option value="">품목을 선택하세요</option>
-                    {messages.filter(m => m.category === "제품 브로슈어").map(m => <option key={m.id} value={m.title}>{m.title}</option>)}
-                  </select>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="relative">
-                      <Building2 size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300"/>
-                      <input className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl text-sm font-bold" placeholder="거래처명" value={requestForm.accountName} onChange={e => setRequestForm({...requestForm, accountName: e.target.value})} required />
-                    </div>
-                    <div className="relative">
-                      <Fingerprint size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300"/>
-                      <input className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl text-sm font-bold" placeholder="코드" value={requestForm.accountCode} onChange={e => setRequestForm({...requestForm, accountCode: e.target.value})} required />
-                    </div>
-                  </div>
+            useEffect(() => {
+                if (!user || !window.FB) return;
+                const { db, appId, collection, onSnapshot, addDoc } = window.FB;
+                const base = `/artifacts/${appId}/public/data/`;
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <input className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl text-sm font-bold text-center" placeholder="신청자명" value={requestForm.requesterName} onChange={e => setRequestForm({...requestForm, requesterName: e.target.value})} required />
-                    <input type="number" inputMode="numeric" className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl text-sm font-bold text-center" placeholder="수량" value={requestForm.quantity} onChange={e => setRequestForm({...requestForm, quantity: e.target.value})} required />
-                  </div>
-                  <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl text-sm font-bold text-center" placeholder="연락처 (010-0000-0000)" value={requestForm.phone} onChange={e => setRequestForm({...requestForm, phone: e.target.value})} required />
-                  <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl text-sm font-bold text-center" placeholder="사무소명 (예: 강남사무소)" value={requestForm.office} onChange={e => setRequestForm({...requestForm, office: e.target.value})} required />
-                  <button className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"><Save size={18}/> 신청 등록하기</button>
-                </form>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="relative group shadow-sm">
-                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={20} />
-                  <input className="w-full pl-14 pr-6 py-5 bg-white rounded-[2rem] border-none outline-none text-sm font-black focus:ring-4 focus:ring-blue-50 transition-all text-center" placeholder="키워드 검색..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                </div>
+                const unsubMsg = onSnapshot(collection(db, `${base}messages`), (snap) => {
+                    let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (data.length === 0 && !isAdminMode) {
+                        INITIAL_MOCK.forEach(m => addDoc(collection(db, `${base}messages`), { ...m, timestamp: Date.now() }));
+                    }
+                    setMessages(data.sort((a,b) => b.timestamp - a.timestamp));
+                });
+
+                const unsubReq = onSnapshot(collection(db, `${base}requests`), (snap) => {
+                    setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
+                });
+
+                return () => { unsubMsg(); unsubReq(); };
+            }, [user, isAdminMode]);
+
+            const logAction = async (action, target) => {
+                if (!empId || !window.FB) return;
+                await window.FB.addDoc(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/logs`), {
+                    empId, action, target, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR')
+                });
+            };
+
+            const getReportText = async () => {
+                const logSnap = await window.FB.getDocs(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/logs`));
+                const reqSnap = await window.FB.getDocs(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`));
                 
-                <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
-                  {CATEGORIES.map(cat => (
-                    <button key={cat} onClick={() => setSelectedCategory(cat)} className={`whitespace-nowrap px-5 py-2.5 rounded-2xl text-[10px] font-black transition-all ${selectedCategory === cat ? "bg-slate-800 text-white shadow-lg scale-105" : "bg-white text-slate-400 border border-slate-100"}`}>
-                      {cat}
-                    </button>
-                  ))}
-                </div>
+                let text = "[활동로그]\n사번,활동,대상,일시\n";
+                logSnap.docs.forEach(d => { const l = d.data(); text += `${l.empId},${l.action},"${l.target}",${l.dateString}\n`; });
+                text += "\n[브로슈어 신청]\n사번,성함,거래처,코드,사무소,품목,수량,상태\n";
+                reqSnap.docs.forEach(d => { const r = d.data(); text += `${r.empId},${r.requesterName},${r.accountName},${r.accountCode},${r.office},"${r.brochureName}",${r.quantity},${r.completed ? "완료":"대기"}\n`; });
+                return text;
+            };
 
-                <div className="grid grid-cols-1 gap-4">
-                  {filteredDisplay.length > 0 ? (
-                    filteredDisplay.map(item => (
-                      <div key={item.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-50 transition-all active:scale-[0.98] group text-center">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-[9px] font-black px-2 py-0.5 bg-blue-50 text-blue-600 rounded-md uppercase tracking-wider">{item.category}</span>
+            const downloadExcel = async () => {
+                try {
+                    const content = await getReportText();
+                    const blob = new Blob(["\uFEFF" + content], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `DM_HUB_REPORT_${new Date().toISOString().slice(0,10)}.csv`;
+                    a.click();
+                } catch(e) { alert("다운로드 오류. '데이터 전체 복사' 기능을 이용해 주세요."); }
+            };
+
+            const copyToClipboard = async () => {
+                const content = await getReportText();
+                const el = document.createElement('textarea');
+                el.value = content;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                alert("데이터가 복사되었습니다! 카톡이나 엑셀에 붙여넣기 하세요.");
+            };
+
+            const filteredDisplay = useMemo(() => {
+                const list = activeTab === "videos" ? messages.filter(m => m.category === "교육 영상") : messages.filter(m => m.category !== "교육 영상");
+                const catMatch = selectedCategory === "전체" ? list : list.filter(m => m.category === selectedCategory);
+                return catMatch.filter(m => m.title.toLowerCase().includes(searchQuery.toLowerCase()));
+            }, [messages, activeTab, searchQuery, selectedCategory]);
+
+            if (!isLoggedIn) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-6 text-center">
+                        <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl">
+                            <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-3 shadow-inner"><Icon name="user" size={40} /></div>
+                            <h1 className="text-2xl font-black text-slate-800 tracking-tight">DM TEAM MR HUB</h1>
+                            <p className="text-slate-400 text-xs mt-2 mb-8 font-bold uppercase tracking-widest text-center">Authorized Access Only</p>
+                            <form onSubmit={(e) => { e.preventDefault(); if(/^\d{6}$/.test(empId)) { localStorage.setItem('mr_emp_id', empId); setIsLoggedIn(true); logAction("LOGIN", "시스템 접속"); } else alert("사번 6자리를 숫자로 입력하세요."); }} className="space-y-6 text-center">
+                                <input type="text" inputMode="numeric" pattern="\d*" maxLength={6} className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-3xl font-black tracking-[0.4em] outline-none focus:border-blue-500 focus:bg-white transition-all shadow-sm" placeholder="000000" value={empId} onChange={e => setEmpId(e.target.value)} required />
+                                <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-100 text-center">입장하기</button>
+                            </form>
                         </div>
-                        <h3 className="text-lg font-black text-slate-800 mb-1 leading-tight">{item.title}</h3>
-                        <p className="text-[12px] text-slate-400 font-medium mb-5 line-clamp-2 leading-relaxed">{item.description}</p>
-                        
-                        {activeTab === "materials" ? (
-                          <div className="flex gap-2">
-                            {item.pdfUrl && <a href={item.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={() => logAction("PDF 열람", item.title)} className="flex-1 flex items-center justify-center gap-2 py-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-black border border-red-100"><Download size={14} /> PDF</a>}
-                            {item.pptUrl && <a href={item.pptUrl} target="_blank" rel="noopener noreferrer" onClick={() => logAction("PPT 열람", item.title)} className="flex-1 flex items-center justify-center gap-2 py-4 bg-orange-50 text-orange-600 rounded-2xl text-[10px] font-black border border-orange-100"><Download size={14} /> PPT</a>}
-                          </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-xl mx-auto min-h-screen pb-24 relative">
+                    <header className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-sm">
+                        <div className="flex items-center gap-2 text-slate-800 uppercase font-black tracking-tighter">
+                            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><Icon name="file" size={18}/></div>
+                            <span>DM TEAM HUB</span>
+                        </div>
+                        <button onClick={() => isAdminMode ? setIsAdminMode(false) : setShowAdminLogin(true)} className={`p-2.5 rounded-2xl transition-all ${isAdminMode ? 'bg-red-500 text-white' : 'bg-white border text-slate-300'}`}>
+                            {isAdminMode ? <Icon name="logout" size={20} /> : <Icon name="lock" size={20} />}
+                        </button>
+                    </header>
+
+                    {!isAdminMode && (
+                        <nav className="flex bg-white border-b sticky top-[69px] z-40 p-1 shadow-sm">
+                            <button onClick={() => { setActiveTab("requests"); setSelectedCategory("전체"); }} className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${activeTab === "requests" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>브로셔 신청</button>
+                            <button onClick={() => { setActiveTab("materials"); setSelectedCategory("전체"); }} className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${activeTab === "materials" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>자료실</button>
+                            <button onClick={() => { setActiveTab("videos"); setSelectedCategory("전체"); }} className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${activeTab === "videos" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>교육영상</button>
+                        </nav>
+                    )}
+
+                    <main className="p-4 sm:p-6">
+                        {isAdminMode ? (
+                            <div className="space-y-4">
+                                <div className="bg-white p-6 rounded-3xl border border-blue-50 text-center shadow-sm">
+                                    <h2 className="font-black text-lg mb-4 text-blue-600 uppercase tracking-widest"><Icon name="database" size={20} className="inline mr-2"/>PM Dashboard</h2>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <button onClick={downloadExcel} className="w-full bg-green-600 text-white py-4 rounded-2xl text-sm font-black shadow-md flex items-center justify-center gap-2"><Icon name="excel" size={18}/> 엑셀 다운로드</button>
+                                        <button onClick={copyToClipboard} className="w-full bg-slate-800 text-white py-4 rounded-2xl text-sm font-black shadow-md flex items-center justify-center gap-2"><Icon name="copy" size={18}/> 데이터 전체 복사 (모바일용)</button>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
+                                    <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">최근 신청 내역</div>
+                                    <div className="divide-y max-h-[600px] overflow-y-auto no-scrollbar">
+                                        {requests.map(req => (
+                                            <div key={req.id} className={`p-5 flex items-center gap-4 transition-all ${req.completed ? 'opacity-40' : ''}`}>
+                                                <button onClick={() => window.FB.updateDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`, req.id), { completed: !req.completed })}>
+                                                    {req.completed ? <Icon name="checkCircle" size={24} className="text-green-500"/> : <Icon name="circle" size={24} className="text-slate-200"/>}
+                                                </button>
+                                                <div className={`text-left flex-1 ${req.completed ? 'line-through decoration-2' : ''}`}>
+                                                    <p className="font-black text-sm text-blue-600">{req.brochureName} ({req.quantity}부)</p>
+                                                    <p className="text-[10px] font-bold text-slate-800">거래처: {req.accountName}</p>
+                                                    <p className="text-[9px] text-slate-400 font-medium">{req.office} | MR: {req.empId}</p>
+                                                </div>
+                                                <button onClick={() => window.confirm("삭제하시겠습니까?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`, req.id))} className="text-slate-200 hover:text-red-500"><Icon name="trash" size={18}/></button>
+                                            </div>
+                                        ))}
+                                        {requests.length === 0 && <p className="p-10 text-center text-slate-300 font-bold italic">내역이 없습니다.</p>}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : activeTab === "requests" ? (
+                            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
+                                <div className="text-center mb-8">
+                                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner rotate-3 text-center"><Icon name="cart" size={32}/></div>
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight text-center">브로슈어 신청</h2>
+                                </div>
+                                <form onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    await window.FB.addDoc(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`), { ...requestForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
+                                    logAction("신청", requestForm.brochureName);
+                                    alert("성공적으로 신청되었습니다.");
+                                    setRequestForm({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
+                                }} className="space-y-4 text-center">
+                                    <select className="w-full p-4 bg-slate-50 border-2 rounded-2xl font-bold appearance-none text-center outline-none focus:border-blue-500" value={requestForm.brochureName} onChange={e => setRequestForm({...requestForm, brochureName: e.target.value})} required>
+                                        <option value="">브로슈어 품목 선택</option>
+                                        {messages.filter(m => m.category === "제품 브로슈어").map(m => <option key={m.id} value={m.title}>{m.title}</option>)}
+                                    </select>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-center">
+                                        <div className="relative text-center">
+                                            <Icon name="building" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 text-center"/>
+                                            <input className="w-full pl-11 pr-4 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-sm outline-none focus:border-blue-500 text-center sm:text-left" placeholder="거래처명" value={requestForm.accountName} onChange={e => setRequestForm({...requestForm, accountName: e.target.value})} required />
+                                        </div>
+                                        <div className="relative text-center">
+                                            <Icon name="finger" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 text-center"/>
+                                            <input className="w-full pl-11 pr-4 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-sm outline-none focus:border-blue-500 text-center sm:text-left" placeholder="거래처코드" value={requestForm.accountCode} onChange={e => setRequestForm({...requestForm, accountCode: e.target.value})} required />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 text-center">
+                                        <input className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="신청자명" value={requestForm.requesterName} onChange={e => setRequestForm({...requestForm, requesterName: e.target.value})} required />
+                                        <input type="number" inputMode="numeric" className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="수량" value={requestForm.quantity} onChange={e => setRequestForm({...requestForm, quantity: e.target.value})} required />
+                                    </div>
+                                    <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="연락처 (010-0000-0000)" value={requestForm.phone} onChange={e => setRequestForm({...requestForm, phone: e.target.value})} required />
+                                    <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="사무소명 (예: 강남사무소)" value={requestForm.office} onChange={e => setRequestForm({...requestForm, office: e.target.value})} required />
+                                    <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black shadow-xl shadow-blue-100 active:scale-95 transition-all text-center flex items-center justify-center gap-2"><Icon name="save" size={18}/> 등록하기</button>
+                                </form>
+                            </div>
                         ) : (
-                          <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" onClick={() => logAction("영상 시청", item.title)} className="w-full flex items-center justify-center gap-2 py-5 bg-red-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-red-100 active:bg-red-700">
-                            <Youtube size={20} /> 교육 영상 시청하기
-                          </a>
+                            <div className="space-y-4 text-center">
+                                <div className="relative group text-center">
+                                    <Icon name="search" size={20} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-blue-500 text-center" />
+                                    <input className="w-full pl-14 pr-6 py-5 bg-white rounded-[2rem] border-none shadow-sm outline-none text-sm font-black focus:ring-4 focus:ring-blue-50 transition-all text-center" placeholder="키워드 검색..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                                </div>
+                                <div className="flex gap-2 overflow-x-auto no-scrollbar py-2 text-center">
+                                    {CATEGORIES.map(cat => (
+                                        <button key={cat} onClick={() => setSelectedCategory(cat)} className={`whitespace-nowrap px-4 py-2 rounded-2xl text-[10px] font-black transition-all text-center ${selectedCategory === cat ? "bg-slate-800 text-white shadow-lg scale-105" : "bg-white text-slate-400 border border-slate-100"}`}>
+                                            {cat}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="grid grid-cols-1 gap-4 text-center">
+                                    {filteredDisplay.map(item => (
+                                        <div key={item.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-50 text-center active:scale-[0.98] transition-all group">
+                                            <span className="text-[9px] font-black px-2 py-1 bg-blue-50 text-blue-600 rounded-md uppercase mb-2 inline-block tracking-wider text-center">{item.category}</span>
+                                            <h3 className="text-lg font-black text-slate-800 mb-2 leading-tight group-hover:text-blue-600 transition-colors text-center">{item.title}</h3>
+                                            <p className="text-[12px] text-slate-400 font-medium mb-5 line-clamp-2 leading-relaxed text-center">{item.description}</p>
+                                            <div className="flex gap-2 text-center">
+                                                {item.pdfUrl && <a href={item.pdfUrl} target="_blank" onClick={() => logAction("PDF 열람", item.title)} className="flex-1 bg-red-50 text-red-600 py-4 rounded-2xl text-[10px] font-black border border-red-100 text-center flex items-center justify-center gap-1"><Icon name="download" size={14}/> PDF</a>}
+                                                {item.pptUrl && <a href={item.pptUrl} target="_blank" onClick={() => logAction("PPT 열람", item.title)} className="flex-1 bg-orange-50 text-orange-600 py-4 rounded-2xl text-[10px] font-black border border-orange-100 text-center flex items-center justify-center gap-1"><Icon name="download" size={14}/> PPT</a>}
+                                                {item.youtubeUrl && <a href={item.youtubeUrl} target="_blank" onClick={() => logAction("영상 시청", item.title)} className="w-full bg-red-600 text-white py-4 rounded-2xl text-xs font-black shadow-lg shadow-red-100 flex items-center justify-center gap-2 text-center"><Icon name="youtube" size={16}/> 영상 시청</a>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="py-24 text-center text-slate-300 font-black italic">등록된 자료가 없습니다.</div>
-                  )}
+                    </main>
+
+                    {/* Admin Auth Modal */}
+                    {showAdminLogin && (
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-md p-4 text-center">
+                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in text-center">
+                                <h2 className="font-black text-lg mb-8 flex items-center justify-center gap-2 uppercase tracking-widest text-center"><Icon name="lock" size={20} className="text-blue-600"/> PM AUTH</h2>
+                                <form onSubmit={(e) => {
+                                    e.preventDefault();
+                                    if (passwordInput === ADMIN_PASSWORD) { setIsAdminMode(true); setShowAdminLogin(false); setPasswordInput(""); }
+                                    else alert("비밀번호 불일치");
+                                }} className="space-y-4 text-center">
+                                    <input type="password" autoFocus className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-2xl font-black outline-none focus:border-blue-500 text-center" placeholder="••••" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} />
+                                    <button className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black shadow-xl text-center">인증 확인</button>
+                                </form>
+                                <button onClick={() => setShowAdminLogin(false)} className="w-full mt-4 text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] text-center">닫기</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-      </main>
+            );
+        };
 
-      {/* Admin Login Modal */}
-      {showAdminLogin && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-md p-4 text-center">
-          <div className="bg-white w-full max-w-xs rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-200">
-            <h2 className="text-center font-black text-lg mb-8 flex items-center justify-center gap-2 uppercase tracking-widest"><Lock size={20} className="text-blue-600"/> PM AUTH</h2>
-            <form onSubmit={(e) => { e.preventDefault(); if (adminPasswordInput === ADMIN_PASSWORD) { setIsAdminMode(true); setShowAdminLogin(false); setAdminPasswordInput(""); } else alert("비밀번호 불일치"); }} className="space-y-4">
-              <input type="password" autoFocus className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-2xl font-black outline-none focus:border-blue-500 transition-all" placeholder="••••" value={adminPasswordInput} onChange={e => setAdminPasswordInput(e.target.value)} />
-              <button className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black shadow-xl hover:bg-slate-800 transition-all">인증 확인</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Log View Modal (최후의 수단) */}
-      {showLogView && (
-        <div className="fixed inset-0 z-[70] flex flex-col bg-white p-6 animate-in slide-in-from-bottom duration-300">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="font-black text-xl">Raw Activity Logs</h2>
-            <button onClick={() => setShowLogView(false)} className="p-2 bg-slate-100 rounded-full"><X/></button>
-          </div>
-          <p className="text-xs text-slate-400 mb-4 font-bold uppercase">아래 내용을 길게 눌러 전체 선택 후 복사하세요.</p>
-          <textarea 
-            readOnly 
-            className="flex-1 w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-mono border-none outline-none focus:ring-0" 
-            value={rawLogText} 
-          />
-          <button onClick={handleCopyLogs} className="w-full bg-blue-600 text-white py-5 mt-4 rounded-2xl font-black">클립보드에 복사</button>
-        </div>
-      )}
-
-      {!isAdminMode && (
-        <footer className="fixed bottom-0 left-0 right-0 p-3 bg-white/60 backdrop-blur-sm border-t text-center z-40">
-          <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.2em] opacity-60 italic tracking-tighter">DM TEAM HUB - Authorized Use Only</p>
-        </footer>
-      )}
-    </div>
-  );
-};
-
-export default App;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
