@@ -117,7 +117,7 @@
             const [formState, setFormState] = useState({ title: "", category: "", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "", thumbnail: "" });
             const [requestForm, setRequestForm] = useState({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
             const [newBrochureName, setNewBrochureName] = useState("");
-            const [newCategoryName, setNewCategoryName] = useState(""); // 자료실 카테고리 추가용
+            const [newCategoryName, setNewCategoryName] = useState("");
 
             useEffect(() => {
                 const init = setInterval(() => {
@@ -150,14 +150,13 @@
                     setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
                 });
 
-                // 커스텀 카테고리 (순서 지정 기능 추가)
+                // 커스텀 카테고리 (order 필드 기준 정렬)
                 const unsubCat = onSnapshot(collection(db, `${base}categories`), (snap) => {
                     let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     if (data.length === 0 && !isAdminMode) {
                         const defaults = ["임상 데이터", "경쟁품 비교", "보험 가이드라인", "디테일 카드", "FAQ/Q&A"];
                         defaults.forEach((c, i) => addDoc(collection(db, `${base}categories`), { name: c, order: i, timestamp: Date.now() }));
                     }
-                    // order 필드를 기준으로 먼저 정렬하고, 없으면 생성 시간(timestamp) 순서로 정렬합니다.
                     setCategoriesList(data.sort((a,b) => {
                         const orderA = a.order !== undefined ? a.order : Number.MAX_SAFE_INTEGER;
                         const orderB = b.order !== undefined ? b.order : Number.MAX_SAFE_INTEGER;
@@ -227,29 +226,32 @@
                 setIsAdminMode(false);
             };
 
-            // 카테고리 순서 위/아래 변경 로직
+            // 카테고리 순서 위/아래 변경 로직 (전체 정렬 일괄 덮어쓰기 방식으로 변경하여 동기화 꼬임 방지)
             const moveCategory = async (index, direction) => {
                 if (!window.FB) return;
                 const newIndex = index + direction;
                 if (newIndex < 0 || newIndex >= categoriesList.length) return;
 
-                const target = categoriesList[index];
-                const sibling = categoriesList[newIndex];
-
-                // 기존 데이터 호환을 위해 order 값이 없으면 현재 인덱스를 사용
-                const targetOrder = target.order !== undefined ? target.order : index;
-                const siblingOrder = sibling.order !== undefined ? sibling.order : newIndex;
+                // 화면에 즉시 적용 (버벅임 방지)
+                const newList = [...categoriesList];
+                const temp = newList[index];
+                newList[index] = newList[newIndex];
+                newList[newIndex] = temp;
+                setCategoriesList(newList);
 
                 const { db, appId, doc, updateDoc } = window.FB;
                 
-                // 두 아이템의 order 값을 서로 바꿉니다
-                await Promise.all([
-                    updateDoc(doc(db, `/artifacts/${appId}/public/data/categories`, target.id), { order: siblingOrder }),
-                    updateDoc(doc(db, `/artifacts/${appId}/public/data/categories`, sibling.id), { order: targetOrder })
-                ]);
+                // 전체 리스트의 순서 번호(order)를 명확한 숫자로 일괄 재부여하여 모바일과 100% 동기화
+                try {
+                    await Promise.all(newList.map((item, i) => 
+                        updateDoc(doc(db, `/artifacts/${appId}/public/data/categories`, item.id), { order: i })
+                    ));
+                } catch(e) {
+                    console.error("순서 업데이트 실패:", e);
+                }
             };
 
-            // 썸네일 이미지 압축 및 Base64 변환
+            // 썸네일 이미지 압축
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -282,7 +284,6 @@
                 if (!window.FB) return;
                 const { db, appId, collection, addDoc, updateDoc, doc } = window.FB;
                 
-                // 만약 사용자가 카테고리를 선택하지 않았다면 최상단 첫번째 카테고리로 지정
                 const finalCategory = formState.category || (categoriesList.length > 0 ? categoriesList[0].name : "기타");
                 const data = { ...formState, category: finalCategory, timestamp: Date.now() };
                 
@@ -357,7 +358,7 @@
                                     </div>
                                 </div>
 
-                                {/* Admin Tabs (6개 탭을 모바일에서 잘 보이게 구성) */}
+                                {/* Admin Tabs */}
                                 <div className="flex flex-wrap bg-slate-200 p-1 rounded-2xl gap-1">
                                     {['requests', 'brochures', 'categories', 'materials', 'videos', 'logs'].map(t => (
                                         <button key={t} onClick={() => { setActiveTab(t); setEditingId(null); if(t === 'logs') fetchRecentLogs(); }} className={`flex-1 min-w-[50px] py-3 px-1 text-[10px] sm:text-[11px] font-black rounded-xl transition-all ${activeTab === t ? 'bg-white shadow-md text-blue-600' : 'text-slate-500 hover:bg-slate-300'}`}>
@@ -366,7 +367,7 @@
                                     ))}
                                 </div>
 
-                                {/* 1. 카테고리 관리 탭 (자료실 카테고리) */}
+                                {/* 1. 카테고리 관리 탭 (자료실 카테고리) - 순서 변경 포함 */}
                                 {activeTab === 'categories' && (
                                     <div className="space-y-4 animate-in fade-in">
                                         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
@@ -436,13 +437,12 @@
                                     </div>
                                 )}
 
-                                {/* 3. 자료 및 영상 등록 탭 (썸네일 첨부, 카테고리 선택) */}
+                                {/* 3. 자료 및 영상 등록 탭 */}
                                 {(activeTab === 'materials' || activeTab === 'videos') && (
                                     <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center sm:text-left">
                                         <h3 className="font-black text-xs mb-6 text-slate-400 uppercase tracking-widest text-center">{editingId ? "수정 모드" : "새 콘텐츠 업로드"}</h3>
                                         <form onSubmit={handleSaveContent} className="space-y-4 text-center">
                                             
-                                            {/* 썸네일 업로드 UI */}
                                             <div className="text-left space-y-2">
                                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">썸네일 이미지 (선택)</label>
                                                 <div className="flex items-center gap-3">
@@ -462,7 +462,6 @@
 
                                             <input className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="자료/영상 제목" value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} required />
                                             
-                                            {/* 동적 카테고리 셀렉트 */}
                                             {activeTab === 'materials' ? (
                                                 <select className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-center outline-none focus:border-blue-500" value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} required>
                                                     <option value="" disabled hidden>-- 카테고리 선택 --</option>
@@ -598,9 +597,9 @@
                                     <input className="w-full pl-14 pr-6 py-5 bg-white rounded-[2rem] border-none shadow-sm outline-none text-sm font-black focus:ring-4 focus:ring-blue-50 transition-all text-center" placeholder="키워드 검색..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                                 </div>
                                 
-                                {/* 스크롤 개선된 카테고리 영역 */}
+                                {/* 스크롤 개선된 카테고리 탭 영역 */}
                                 {activeTab === "materials" && (
-                                    <div className="w-full overflow-x-auto no-scrollbar py-2 touch-pan-x mb-2">
+                                    <div className="w-full overflow-x-auto no-scrollbar py-2">
                                         <div className="flex gap-2 w-max px-1">
                                             {['전체', ...categoriesList.map(c => c.name)].map(cat => (
                                                 <button key={cat} onClick={() => setSelectedCategory(cat)} className={`flex-shrink-0 whitespace-nowrap px-5 py-2.5 rounded-full text-[11px] font-black transition-all text-center ${selectedCategory === cat ? "bg-slate-800 text-white shadow-lg scale-105" : "bg-white text-slate-500 border border-slate-100 hover:bg-slate-50"}`}>
