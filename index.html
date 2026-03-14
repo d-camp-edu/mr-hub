@@ -14,7 +14,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        // setDoc 추가
+        import { getFirestore, collection, addDoc, doc, setDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyB475AzDr96EP6I7YsyZx3OjnYDMuMaq7k",
@@ -32,7 +33,7 @@
 
         window.FB = { 
             db, auth, appId, 
-            collection, addDoc, doc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit,
+            collection, addDoc, doc, setDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit,
             signInAnonymously, onAuthStateChanged 
         };
     </script>
@@ -76,7 +77,9 @@
                 plus: <g><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></g>,
                 image: <g><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></g>,
                 arrowUp: <g><polyline points="18 15 12 9 6 15"/></g>,
-                arrowDown: <g><polyline points="6 9 12 15 18 9"/></g>
+                arrowDown: <g><polyline points="6 9 12 15 18 9"/></g>,
+                messageSquare: <g><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></g>,
+                settings: <g><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></g>
             };
             return (
                 <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -87,23 +90,23 @@
 
         const ADMIN_PASSWORD = "1024";
 
-        const INITIAL_MOCK = [
-            { title: "[임상] A약제 3상 효능 분석 요약", category: "임상 데이터", description: "주요 평가지표 및 위약군 대비 유의성 데이터", pdfUrl: "#", pptUrl: "#", thumbnail: "" },
-            { title: "2024년형 메인 제품 종합 브로슈어", category: "제품 브로슈어", description: "전 제형 정보 포함 최신 버전 (신청 가능)", pdfUrl: "#", pptUrl: "", thumbnail: "" },
-            { title: "[교육] 효과적인 디테일링 스킬 강좌", category: "교육 영상", youtubeUrl: "https://www.youtube.com", description: "마케팅팀 권장 표준 멘트 강좌", thumbnail: "" }
-        ];
-
         const App = () => {
             const [user, setUser] = useState(null);
-            const [empId, setEmpId] = useState(localStorage.getItem('mr_emp_id') || "");
-            const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('mr_emp_id'));
+            
+            // 로그아웃 시 데이터 휘발되도록 sessionStorage 사용
+            const [empId, setEmpId] = useState(sessionStorage.getItem('mr_emp_id') || "");
+            const [isLoggedIn, setIsLoggedIn] = useState(!!sessionStorage.getItem('mr_emp_id'));
+            
             const [activeTab, setActiveTab] = useState("materials");
             
             // 데이터 상태
             const [messages, setMessages] = useState([]);
             const [requests, setRequests] = useState([]);
+            const [inquiries, setInquiries] = useState([]);
             const [recentLogs, setRecentLogs] = useState([]);
             const [categoriesList, setCategoriesList] = useState([]);
+            const [videoCategoriesList, setVideoCategoriesList] = useState([]);
+            const [mrPassword, setMrPassword] = useState("1024");
             
             // UI 제어 상태
             const [searchQuery, setSearchQuery] = useState("");
@@ -114,10 +117,15 @@
             const [editingId, setEditingId] = useState(null);
             
             // 입력 폼 상태
+            const [loginEmpId, setLoginEmpId] = useState("");
+            const [loginPassword, setLoginPassword] = useState("");
             const [formState, setFormState] = useState({ title: "", category: "", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "", thumbnail: "" });
             const [requestForm, setRequestForm] = useState({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
+            const [inquiryForm, setInquiryForm] = useState({ division: "", team: "", name: "", content: "" });
             const [newBrochureName, setNewBrochureName] = useState("");
             const [newCategoryName, setNewCategoryName] = useState("");
+            const [newVideoCategoryName, setNewVideoCategoryName] = useState("");
+            const [newMrPassword, setNewMrPassword] = useState("");
 
             useEffect(() => {
                 const init = setInterval(() => {
@@ -133,31 +141,50 @@
 
             useEffect(() => {
                 if (!user || !window.FB) return;
-                const { db, appId, collection, onSnapshot, addDoc } = window.FB;
+                const { db, appId, collection, doc, setDoc, onSnapshot } = window.FB;
                 const base = `/artifacts/${appId}/public/data/`;
 
-                // 자료실 콘텐츠
-                const unsubMsg = onSnapshot(collection(db, `${base}messages`), (snap) => {
-                    let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    if (data.length === 0 && !isAdminMode) {
-                        INITIAL_MOCK.forEach(m => addDoc(collection(db, `${base}messages`), { ...m, timestamp: Date.now() }));
+                // 시스템 설정 (MR 접속 암호)
+                const unsubSettings = onSnapshot(doc(db, `${base}settings`, 'config'), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const pwd = docSnap.data().mrPassword;
+                        setMrPassword(pwd || "1024");
+                        setNewMrPassword(pwd || "1024");
+                    } else {
+                        if (isAdminMode) setDoc(doc(db, `${base}settings`, 'config'), { mrPassword: "1024" }, { merge: true });
                     }
-                    setMessages(data.sort((a,b) => b.timestamp - a.timestamp));
                 });
 
-                // 브로슈어 신청 내역
+                // 자료/영상
+                const unsubMsg = onSnapshot(collection(db, `${base}messages`), (snap) => {
+                    setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
+                });
+
+                // 브로슈어 신청
                 const unsubReq = onSnapshot(collection(db, `${base}requests`), (snap) => {
                     setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
                 });
 
-                // 커스텀 카테고리 (order 필드 기준 정렬)
+                // 문의 건의 내역
+                const unsubInq = onSnapshot(collection(db, `${base}inquiries`), (snap) => {
+                    setInquiries(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
+                });
+
+                // 자료 카테고리
                 const unsubCat = onSnapshot(collection(db, `${base}categories`), (snap) => {
                     let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    if (data.length === 0 && !isAdminMode) {
-                        const defaults = ["임상 데이터", "경쟁품 비교", "보험 가이드라인", "디테일 카드", "FAQ/Q&A"];
-                        defaults.forEach((c, i) => addDoc(collection(db, `${base}categories`), { name: c, order: i, timestamp: Date.now() }));
-                    }
                     setCategoriesList(data.sort((a,b) => {
+                        const orderA = a.order !== undefined ? a.order : Number.MAX_SAFE_INTEGER;
+                        const orderB = b.order !== undefined ? b.order : Number.MAX_SAFE_INTEGER;
+                        if (orderA === orderB) return a.timestamp - b.timestamp;
+                        return orderA - orderB;
+                    }));
+                });
+
+                // 영상 카테고리
+                const unsubVidCat = onSnapshot(collection(db, `${base}videoCategories`), (snap) => {
+                    let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setVideoCategoriesList(data.sort((a,b) => {
                         const orderA = a.order !== undefined ? a.order : Number.MAX_SAFE_INTEGER;
                         const orderB = b.order !== undefined ? b.order : Number.MAX_SAFE_INTEGER;
                         if (orderA === orderB) return a.timestamp - b.timestamp;
@@ -166,7 +193,7 @@
                 });
                 
                 fetchRecentLogs();
-                return () => { unsubMsg(); unsubReq(); unsubCat(); };
+                return () => { unsubSettings(); unsubMsg(); unsubReq(); unsubInq(); unsubCat(); unsubVidCat(); };
             }, [user, isAdminMode]);
 
             const fetchRecentLogs = useCallback(async () => {
@@ -185,14 +212,36 @@
                 });
             };
 
+            const handleUserLogin = (e) => {
+                e.preventDefault();
+                if (!/^\d{6}$/.test(loginEmpId)) {
+                    alert("사번 6자리를 숫자로 입력하세요.");
+                    return;
+                }
+                if (loginPassword !== mrPassword) {
+                    alert("접속 암호가 일치하지 않습니다.");
+                    return;
+                }
+                sessionStorage.setItem('mr_emp_id', loginEmpId);
+                setEmpId(loginEmpId);
+                setIsLoggedIn(true);
+                logAction("LOGIN", "시스템 접속");
+            };
+
             const getReportText = async () => {
                 const logSnap = await window.FB.getDocs(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/logs`));
                 const reqSnap = await window.FB.getDocs(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`));
+                const inqSnap = await window.FB.getDocs(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/inquiries`));
                 
                 let text = "[활동로그]\n사번,활동,대상,일시\n";
                 logSnap.docs.forEach(d => { const l = d.data(); text += `${l.empId},${l.action},"${l.target}",${l.dateString}\n`; });
+                
                 text += "\n[브로슈어 신청]\n사번,성함,거래처,코드,사무소,품목,수량,상태,일시\n";
                 reqSnap.docs.forEach(d => { const r = d.data(); text += `${r.empId},${r.requesterName},${r.accountName},${r.accountCode},${r.office},"${r.brochureName}",${r.quantity},${r.completed ? "완료":"대기"},${r.dateString}\n`; });
+                
+                text += "\n[문의 및 건의]\n사번,사업부,팀,이름,내용,상태,일시\n";
+                inqSnap.docs.forEach(d => { const i = d.data(); text += `${i.empId},${i.division},${i.team},${i.name},"${i.content.replace(/\n/g, " ")}",${i.completed ? "처리완료":"대기"},${i.dateString}\n`; });
+                
                 return text;
             };
 
@@ -220,38 +269,43 @@
             };
 
             const handleLogout = () => {
-                localStorage.removeItem('mr_emp_id');
+                sessionStorage.removeItem('mr_emp_id');
                 setEmpId("");
+                setLoginEmpId("");
+                setLoginPassword("");
                 setIsLoggedIn(false);
                 setIsAdminMode(false);
             };
 
-            // 카테고리 순서 위/아래 변경 로직 (전체 정렬 일괄 덮어쓰기 방식으로 변경하여 동기화 꼬임 방지)
-            const moveCategory = async (index, direction) => {
+            // 관리자 MR 암호 변경
+            const handleUpdateMrPassword = async () => {
+                if(!window.FB || !newMrPassword) return;
+                await window.FB.setDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/settings`, 'config'), { mrPassword: newMrPassword }, { merge: true });
+                alert("MR 접속 암호가 변경되었습니다.");
+            };
+
+            // 카테고리 순서 위/아래 변경 (공용)
+            const moveCategory = async (list, dbPath, index, direction) => {
                 if (!window.FB) return;
                 const newIndex = index + direction;
-                if (newIndex < 0 || newIndex >= categoriesList.length) return;
+                if (newIndex < 0 || newIndex >= list.length) return;
 
-                // 화면에 즉시 적용 (버벅임 방지)
-                const newList = [...categoriesList];
+                const newList = [...list];
                 const temp = newList[index];
                 newList[index] = newList[newIndex];
                 newList[newIndex] = temp;
-                setCategoriesList(newList);
+                
+                if (dbPath.includes('video')) setVideoCategoriesList(newList);
+                else setCategoriesList(newList);
 
                 const { db, appId, doc, updateDoc } = window.FB;
-                
-                // 전체 리스트의 순서 번호(order)를 명확한 숫자로 일괄 재부여하여 모바일과 100% 동기화
                 try {
                     await Promise.all(newList.map((item, i) => 
-                        updateDoc(doc(db, `/artifacts/${appId}/public/data/categories`, item.id), { order: i })
+                        updateDoc(doc(db, `/artifacts/${appId}/public/data/${dbPath}`, item.id), { order: i })
                     ));
-                } catch(e) {
-                    console.error("순서 업데이트 실패:", e);
-                }
+                } catch(e) { console.error("순서 업데이트 실패:", e); }
             };
 
-            // 썸네일 이미지 압축
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -263,10 +317,7 @@
                         const MAX_WIDTH = 500;
                         let width = img.width;
                         let height = img.height;
-                        if (width > MAX_WIDTH) {
-                            height = Math.round((height * MAX_WIDTH) / width);
-                            width = MAX_WIDTH;
-                        }
+                        if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
                         canvas.width = width;
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
@@ -278,14 +329,18 @@
                 reader.readAsDataURL(file);
             };
 
-            // 자료 및 영상 저장
             const handleSaveContent = async (e) => {
                 e.preventDefault();
                 if (!window.FB) return;
                 const { db, appId, collection, addDoc, updateDoc, doc } = window.FB;
                 
-                const finalCategory = formState.category || (categoriesList.length > 0 ? categoriesList[0].name : "기타");
-                const data = { ...formState, category: finalCategory, timestamp: Date.now() };
+                let finalCategory = formState.category;
+                if (!finalCategory) {
+                    if (activeTab === 'materials') finalCategory = categoriesList.length > 0 ? categoriesList[0].name : "기타";
+                    else if (activeTab === 'videos') finalCategory = videoCategoriesList.length > 0 ? videoCategoriesList[0].name : "기타";
+                }
+                
+                const data = { ...formState, category: finalCategory, isVideo: activeTab === 'videos', timestamp: Date.now() };
                 
                 if (editingId) {
                     await updateDoc(doc(db, `/artifacts/${appId}/public/data/messages`, editingId), data);
@@ -295,11 +350,22 @@
                     alert("등록되었습니다.");
                 }
                 setEditingId(null);
-                setFormState({ title: "", category: activeTab === "videos" ? "교육 영상" : "", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "", thumbnail: "" });
+                setFormState({ title: "", category: "", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "", thumbnail: "" });
+            };
+
+            const submitInquiry = async (e) => {
+                e.preventDefault();
+                await window.FB.addDoc(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/inquiries`), { 
+                    ...inquiryForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') 
+                });
+                logAction("건의/문의 등록", "새로운 문의 접수");
+                alert("성공적으로 접수되었습니다. 담당자가 확인 후 답변드리겠습니다.");
+                setInquiryForm({ division: "", team: "", name: "", content: "" });
             };
 
             const filteredDisplay = useMemo(() => {
-                const list = activeTab === "videos" ? messages.filter(m => m.category === "교육 영상") : messages.filter(m => m.category !== "교육 영상" && m.category !== "제품 브로슈어");
+                const isVidTab = activeTab === "videos";
+                const list = messages.filter(m => m.category !== "제품 브로슈어" && (m.isVideo === isVidTab || (isVidTab ? m.youtubeUrl : !m.youtubeUrl)));
                 const catMatch = selectedCategory === "전체" ? list : list.filter(m => m.category === selectedCategory);
                 return catMatch.filter(m => m.title.toLowerCase().includes(searchQuery.toLowerCase()));
             }, [messages, activeTab, searchQuery, selectedCategory]);
@@ -310,10 +376,11 @@
                         <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl">
                             <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-3 shadow-inner"><Icon name="user" size={40} /></div>
                             <h1 className="text-2xl font-black text-slate-800 tracking-tight">DM TEAM MR HUB</h1>
-                            <p className="text-slate-400 text-xs mt-2 mb-8 font-bold uppercase tracking-widest text-center">Authorized Access Only</p>
-                            <form onSubmit={(e) => { e.preventDefault(); if(/^\d{6}$/.test(empId)) { localStorage.setItem('mr_emp_id', empId); setIsLoggedIn(true); logAction("LOGIN", "시스템 접속"); } else alert("사번 6자리를 숫자로 입력하세요."); }} className="space-y-6 text-center">
-                                <input type="text" inputMode="numeric" pattern="\d*" maxLength={6} className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-3xl font-black tracking-[0.4em] outline-none focus:border-blue-500 focus:bg-white transition-all shadow-sm" placeholder="000000" value={empId} onChange={e => setEmpId(e.target.value)} required />
-                                <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-100 text-center">입장하기</button>
+                            <p className="text-slate-400 text-xs mt-2 mb-8 font-bold uppercase tracking-widest text-center">보안 인증 필요</p>
+                            <form onSubmit={handleUserLogin} className="space-y-4 text-center">
+                                <input type="text" inputMode="numeric" pattern="\d*" maxLength={6} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-lg font-black tracking-widest outline-none focus:border-blue-500 focus:bg-white transition-all shadow-sm" placeholder="사번 (6자리)" value={loginEmpId} onChange={e => setLoginEmpId(e.target.value)} required />
+                                <input type="password" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-lg font-black tracking-widest outline-none focus:border-blue-500 focus:bg-white transition-all shadow-sm" placeholder="접속 암호" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
+                                <button className="w-full bg-blue-600 text-white py-5 mt-2 rounded-2xl font-black text-lg hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-100 text-center">입장하기</button>
                             </form>
                         </div>
                     </div>
@@ -322,8 +389,7 @@
 
             return (
                 <div className="max-w-xl mx-auto min-h-screen pb-24 relative">
-                    {/* Header */}
-                    <header className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-sm">
+                    <header className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-50 px-5 py-4 flex justify-between items-center shadow-sm">
                         <div className="flex items-center gap-2 text-slate-800 uppercase font-black tracking-tighter">
                             <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><Icon name="file" size={18}/></div>
                             <span>DM TEAM HUB</span>
@@ -339,10 +405,13 @@
                     </header>
 
                     {!isAdminMode && (
-                        <nav className="flex bg-white border-b sticky top-[69px] z-40 p-1 shadow-sm">
-                            <button onClick={() => { setActiveTab("requests"); setSelectedCategory("전체"); }} className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${activeTab === "requests" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>브로셔 신청</button>
-                            <button onClick={() => { setActiveTab("materials"); setSelectedCategory("전체"); }} className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${activeTab === "materials" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>자료실</button>
-                            <button onClick={() => { setActiveTab("videos"); setSelectedCategory("전체"); }} className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${activeTab === "videos" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>교육영상</button>
+                        <nav className="flex bg-white border-b sticky top-[69px] z-40 p-1 shadow-sm overflow-x-auto no-scrollbar">
+                            <div className="flex w-full">
+                                <button onClick={() => { setActiveTab("requests"); setSelectedCategory("전체"); }} className={`flex-1 py-3 px-2 text-[11px] whitespace-nowrap font-black rounded-xl transition-all ${activeTab === "requests" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>신청</button>
+                                <button onClick={() => { setActiveTab("materials"); setSelectedCategory("전체"); }} className={`flex-1 py-3 px-2 text-[11px] whitespace-nowrap font-black rounded-xl transition-all ${activeTab === "materials" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>자료실</button>
+                                <button onClick={() => { setActiveTab("videos"); setSelectedCategory("전체"); }} className={`flex-1 py-3 px-2 text-[11px] whitespace-nowrap font-black rounded-xl transition-all ${activeTab === "videos" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>교육영상</button>
+                                <button onClick={() => { setActiveTab("inquiries"); setSelectedCategory("전체"); }} className={`flex-1 py-3 px-2 text-[11px] whitespace-nowrap font-black rounded-xl transition-all ${activeTab === "inquiries" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>건의/문의</button>
+                            </div>
                         </nav>
                     )}
 
@@ -351,23 +420,32 @@
                             <div className="space-y-4 animate-in fade-in">
                                 {/* PM Dashboard */}
                                 <div className="bg-white p-6 rounded-3xl border border-blue-50 text-center shadow-sm">
-                                    <h2 className="font-black text-lg mb-4 text-blue-600 uppercase tracking-widest"><Icon name="database" size={20} className="inline mr-2"/>PM Dashboard</h2>
-                                    <div className="grid grid-cols-1 gap-2">
-                                        <button onClick={downloadExcel} className="w-full bg-green-600 text-white py-4 rounded-2xl text-sm font-black shadow-md flex items-center justify-center gap-2"><Icon name="excel" size={18}/> 엑셀 다운로드</button>
-                                        <button onClick={copyToClipboard} className="w-full bg-slate-800 text-white py-4 rounded-2xl text-sm font-black shadow-md flex items-center justify-center gap-2"><Icon name="copy" size={18}/> 데이터 전체 복사 (모바일용)</button>
+                                    <h2 className="font-black text-lg mb-4 text-blue-600 uppercase tracking-widest"><Icon name="settings" size={20} className="inline mr-2"/>보안 및 관리</h2>
+                                    <div className="flex items-center gap-2 mb-4 bg-slate-50 p-3 rounded-2xl border">
+                                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">MR 암호:</span>
+                                        <input className="flex-1 p-2 bg-white border rounded-xl text-sm font-black text-center outline-none" value={newMrPassword} onChange={e=>setNewMrPassword(e.target.value)} />
+                                        <button onClick={handleUpdateMrPassword} className="bg-slate-800 text-white px-3 py-2 rounded-xl text-[11px] font-black">변경</button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={downloadExcel} className="w-full bg-green-600 text-white py-3 rounded-2xl text-xs font-black shadow-md flex items-center justify-center gap-1"><Icon name="excel" size={16}/> 엑셀 다운</button>
+                                        <button onClick={copyToClipboard} className="w-full bg-slate-800 text-white py-3 rounded-2xl text-xs font-black shadow-md flex items-center justify-center gap-1"><Icon name="copy" size={16}/> 복사</button>
                                     </div>
                                 </div>
 
                                 {/* Admin Tabs */}
                                 <div className="flex flex-wrap bg-slate-200 p-1 rounded-2xl gap-1">
-                                    {['requests', 'brochures', 'categories', 'materials', 'videos', 'logs'].map(t => (
-                                        <button key={t} onClick={() => { setActiveTab(t); setEditingId(null); if(t === 'logs') fetchRecentLogs(); }} className={`flex-1 min-w-[50px] py-3 px-1 text-[10px] sm:text-[11px] font-black rounded-xl transition-all ${activeTab === t ? 'bg-white shadow-md text-blue-600' : 'text-slate-500 hover:bg-slate-300'}`}>
-                                            {t === 'requests' ? '신청내역' : t === 'brochures' ? '품목관리' : t === 'categories' ? '카테고리' : t === 'materials' ? '자료등록' : t === 'videos' ? '영상등록' : '로그'}
+                                    {[
+                                        {id:'requests', lbl:'신청'}, {id:'inquiries', lbl:'문의'}, {id:'brochures', lbl:'품목'}, 
+                                        {id:'categories', lbl:'자료분류'}, {id:'vidCats', lbl:'영상분류'}, {id:'materials', lbl:'자료업로드'}, 
+                                        {id:'videos', lbl:'영상업로드'}, {id:'logs', lbl:'로그'}
+                                    ].map(t => (
+                                        <button key={t.id} onClick={() => { setActiveTab(t.id); setEditingId(null); if(t.id === 'logs') fetchRecentLogs(); }} className={`flex-1 min-w-[65px] py-2 px-1 text-[10px] font-black rounded-xl transition-all ${activeTab === t.id ? 'bg-white shadow-md text-blue-600' : 'text-slate-500 hover:bg-slate-300'}`}>
+                                            {t.lbl}
                                         </button>
                                     ))}
                                 </div>
 
-                                {/* 1. 카테고리 관리 탭 (자료실 카테고리) - 순서 변경 포함 */}
+                                {/* 자료 분류 관리 탭 */}
                                 {activeTab === 'categories' && (
                                     <div className="space-y-4 animate-in fade-in">
                                         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
@@ -379,36 +457,69 @@
                                                     name: newCategoryName.trim(), order: categoriesList.length, timestamp: Date.now()
                                                 });
                                                 setNewCategoryName("");
-                                                alert("카테고리가 추가되었습니다.");
                                             }} className="flex gap-2">
-                                                <input className="flex-1 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="예: 학술 세미나 자료" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} required />
+                                                <input className="flex-1 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="새 자료실 카테고리명" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} required />
                                                 <button type="submit" className="bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
                                             </form>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
-                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">등록된 카테고리 (유저 탭에 표시됨)</div>
+                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">자료실 탭에 보일 카테고리 목록</div>
                                             <div className="divide-y max-h-[400px] overflow-y-auto no-scrollbar">
                                                 {categoriesList.map((item, index) => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center text-left">
                                                         <span className="font-bold text-sm text-slate-800">{item.name}</span>
                                                         <div className="flex items-center gap-1">
-                                                            <button onClick={() => moveCategory(index, -1)} disabled={index === 0} className={`p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowUp" size={16}/></button>
-                                                            <button onClick={() => moveCategory(index, 1)} disabled={index === categoriesList.length - 1} className={`p-2 rounded-lg transition-colors ${index === categoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowDown" size={16}/></button>
-                                                            <button onClick={() => window.confirm("카테고리를 삭제할까요?\n(기존에 이 카테고리로 등록된 자료는 그대로 유지됩니다.)") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/categories`, item.id))} className="p-2 text-slate-300 hover:text-red-500 ml-2"><Icon name="trash" size={18}/></button>
+                                                            <button onClick={() => moveCategory(categoriesList, 'categories', index, -1)} disabled={index === 0} className={`p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowUp" size={16}/></button>
+                                                            <button onClick={() => moveCategory(categoriesList, 'categories', index, 1)} disabled={index === categoriesList.length - 1} className={`p-2 rounded-lg transition-colors ${index === categoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowDown" size={16}/></button>
+                                                            <button onClick={() => window.confirm("삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/categories`, item.id))} className="p-2 text-slate-300 hover:text-red-500 ml-2"><Icon name="trash" size={18}/></button>
                                                         </div>
                                                     </div>
                                                 ))}
-                                                {categoriesList.length === 0 && <p className="p-10 text-center text-slate-300 font-bold italic">등록된 카테고리가 없습니다.</p>}
                                             </div>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* 2. 브로슈어 품목 관리 탭 */}
+                                {/* 영상 분류 관리 탭 */}
+                                {activeTab === 'vidCats' && (
+                                    <div className="space-y-4 animate-in fade-in">
+                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                                            <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">교육 영상 카테고리 추가</h3>
+                                            <form onSubmit={async (e) => {
+                                                e.preventDefault();
+                                                if(!window.FB || !newVideoCategoryName.trim()) return;
+                                                await window.FB.addDoc(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/videoCategories`), {
+                                                    name: newVideoCategoryName.trim(), order: videoCategoriesList.length, timestamp: Date.now()
+                                                });
+                                                setNewVideoCategoryName("");
+                                            }} className="flex gap-2">
+                                                <input className="flex-1 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="새 교육영상 카테고리명" value={newVideoCategoryName} onChange={e => setNewVideoCategoryName(e.target.value)} required />
+                                                <button type="submit" className="bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
+                                            </form>
+                                        </div>
+                                        <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
+                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">영상 탭에 보일 카테고리 목록</div>
+                                            <div className="divide-y max-h-[400px] overflow-y-auto no-scrollbar">
+                                                {videoCategoriesList.map((item, index) => (
+                                                    <div key={item.id} className="p-4 flex justify-between items-center text-left">
+                                                        <span className="font-bold text-sm text-slate-800">{item.name}</span>
+                                                        <div className="flex items-center gap-1">
+                                                            <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, -1)} disabled={index === 0} className={`p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowUp" size={16}/></button>
+                                                            <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, 1)} disabled={index === videoCategoriesList.length - 1} className={`p-2 rounded-lg transition-colors ${index === videoCategoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowDown" size={16}/></button>
+                                                            <button onClick={() => window.confirm("삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/videoCategories`, item.id))} className="p-2 text-slate-300 hover:text-red-500 ml-2"><Icon name="trash" size={18}/></button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 브로슈어 품목 관리 탭 */}
                                 {activeTab === 'brochures' && (
                                     <div className="space-y-4 animate-in fade-in">
                                         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                                            <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">신청 폼에 나타날 품목 추가</h3>
+                                            <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">신청 폼 품목 추가</h3>
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
                                                 if(!window.FB || !newBrochureName.trim()) return;
@@ -416,7 +527,6 @@
                                                     title: newBrochureName.trim(), category: "제품 브로슈어", description: "브로슈어 신청 전용 품목입니다.", pdfUrl: "", pptUrl: "", youtubeUrl: "", timestamp: Date.now()
                                                 });
                                                 setNewBrochureName("");
-                                                alert("신청 품목이 추가되었습니다.");
                                             }} className="flex gap-2">
                                                 <input className="flex-1 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="예: 24년형 메인 리플렛" value={newBrochureName} onChange={e => setNewBrochureName(e.target.value)} required />
                                                 <button type="submit" className="bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
@@ -428,21 +538,19 @@
                                                 {messages.filter(m => m.category === "제품 브로슈어").map(item => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center text-left">
                                                         <span className="font-bold text-sm text-slate-800">{item.title}</span>
-                                                        <button onClick={() => window.confirm("품목을 삭제하시겠습니까?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/messages`, item.id))} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash" size={18}/></button>
+                                                        <button onClick={() => window.confirm("삭제하시겠습니까?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/messages`, item.id))} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash" size={18}/></button>
                                                     </div>
                                                 ))}
-                                                {messages.filter(m => m.category === "제품 브로슈어").length === 0 && <p className="p-10 text-center text-slate-300 font-bold italic">등록된 품목이 없습니다.</p>}
                                             </div>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* 3. 자료 및 영상 등록 탭 */}
+                                {/* 자료 및 영상 등록 탭 */}
                                 {(activeTab === 'materials' || activeTab === 'videos') && (
                                     <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center sm:text-left">
                                         <h3 className="font-black text-xs mb-6 text-slate-400 uppercase tracking-widest text-center">{editingId ? "수정 모드" : "새 콘텐츠 업로드"}</h3>
                                         <form onSubmit={handleSaveContent} className="space-y-4 text-center">
-                                            
                                             <div className="text-left space-y-2">
                                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">썸네일 이미지 (선택)</label>
                                                 <div className="flex items-center gap-3">
@@ -464,12 +572,13 @@
                                             
                                             {activeTab === 'materials' ? (
                                                 <select className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-center outline-none focus:border-blue-500" value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} required>
-                                                    <option value="" disabled hidden>-- 카테고리 선택 --</option>
+                                                    <option value="" disabled hidden>-- 자료 카테고리 선택 --</option>
                                                     {categoriesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                                 </select>
                                             ) : (
-                                                <select className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-center outline-none focus:border-blue-500" value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})}>
-                                                    <option value="교육 영상">교육 영상</option>
+                                                <select className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-center outline-none focus:border-blue-500" value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} required>
+                                                    <option value="" disabled hidden>-- 영상 카테고리 선택 --</option>
+                                                    {videoCategoriesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                                 </select>
                                             )}
 
@@ -493,7 +602,7 @@
                                         <div className="mt-8 border-t pt-4">
                                             <div className="font-black text-xs text-slate-400 mb-4 text-center">등록된 항목 관리</div>
                                             <div className="divide-y max-h-[300px] overflow-y-auto no-scrollbar">
-                                                {(activeTab === 'videos' ? messages.filter(m => m.category === '교육 영상') : messages.filter(m => m.category !== '교육 영상' && m.category !== '제품 브로슈어')).map(item => (
+                                                {(activeTab === 'videos' ? messages.filter(m => m.isVideo) : messages.filter(m => !m.isVideo && m.category !== '제품 브로슈어')).map(item => (
                                                     <div key={item.id} className="py-3 flex justify-between items-center text-left gap-3">
                                                         {item.thumbnail && <img src={item.thumbnail} className="w-10 h-10 object-cover rounded-lg shadow-sm" alt="thumb"/>}
                                                         <div className="flex-1 pr-2">
@@ -511,10 +620,10 @@
                                     </div>
                                 )}
 
-                                {/* 4. 브로슈어 신청 내역 탭 */}
+                                {/* 브로슈어 신청 내역 탭 */}
                                 {activeTab === 'requests' && (
                                     <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
-                                        <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">신청 내역 (체크 시 취소선 표시)</div>
+                                        <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">신청 내역</div>
                                         <div className="divide-y max-h-[600px] overflow-y-auto no-scrollbar">
                                             {requests.map(req => (
                                                 <div key={req.id} className={`p-5 flex items-center gap-4 transition-all ${req.completed ? 'opacity-40' : ''}`}>
@@ -523,10 +632,10 @@
                                                     </button>
                                                     <div className={`text-left flex-1 ${req.completed ? 'line-through decoration-slate-900 decoration-2' : ''}`}>
                                                         <p className="font-black text-sm text-blue-600">{req.brochureName} ({req.quantity}부)</p>
-                                                        <p className="text-[10px] font-bold text-slate-800">거래처: {req.accountName}</p>
-                                                        <p className="text-[9px] text-slate-400 font-medium">{req.office} | {req.requesterName} (MR:{req.empId})</p>
+                                                        <p className="text-[10px] font-bold text-slate-800">{req.accountName}</p>
+                                                        <p className="text-[9px] text-slate-400 font-medium">{req.office} | {req.requesterName}</p>
                                                     </div>
-                                                    <button onClick={() => window.confirm("기록을 삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`, req.id))} className="text-slate-200 hover:text-red-500"><Icon name="trash" size={18}/></button>
+                                                    <button onClick={() => window.confirm("삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`, req.id))} className="text-slate-200 hover:text-red-500"><Icon name="trash" size={18}/></button>
                                                 </div>
                                             ))}
                                             {requests.length === 0 && <p className="p-10 text-center text-slate-300 font-bold italic">신청 내역이 없습니다.</p>}
@@ -534,7 +643,30 @@
                                     </div>
                                 )}
 
-                                {/* 5. 실시간 로그 탭 */}
+                                {/* 문의 내역 탭 */}
+                                {activeTab === 'inquiries' && (
+                                    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
+                                        <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">건의 및 문의 내역</div>
+                                        <div className="divide-y max-h-[600px] overflow-y-auto no-scrollbar">
+                                            {inquiries.map(inq => (
+                                                <div key={inq.id} className={`p-5 flex items-start gap-4 transition-all ${inq.completed ? 'opacity-40' : ''}`}>
+                                                    <button onClick={() => window.FB.updateDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/inquiries`, inq.id), { completed: !inq.completed })} className="mt-1">
+                                                        {inq.completed ? <Icon name="checkCircle" size={24} className="text-green-500"/> : <Icon name="circle" size={24} className="text-slate-200"/>}
+                                                    </button>
+                                                    <div className={`text-left flex-1 ${inq.completed ? 'line-through decoration-slate-900 decoration-2' : ''}`}>
+                                                        <p className="font-bold text-xs text-slate-800 mb-1">[{inq.division}] {inq.team} - {inq.name}({inq.empId})</p>
+                                                        <p className="text-sm text-blue-600 font-black whitespace-pre-wrap">{inq.content}</p>
+                                                        <p className="text-[9px] text-slate-400 font-medium mt-2">{inq.dateString}</p>
+                                                    </div>
+                                                    <button onClick={() => window.confirm("삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/inquiries`, inq.id))} className="text-slate-200 hover:text-red-500"><Icon name="trash" size={18}/></button>
+                                                </div>
+                                            ))}
+                                            {inquiries.length === 0 && <p className="p-10 text-center text-slate-300 font-bold italic">문의 내역이 없습니다.</p>}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 실시간 로그 탭 */}
                                 {activeTab === 'logs' && (
                                     <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
                                         <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
@@ -582,11 +714,29 @@
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 text-center">
                                         <input className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="신청자명" value={requestForm.requesterName} onChange={e => setRequestForm({...requestForm, requesterName: e.target.value})} required />
-                                        <input type="number" inputMode="numeric" className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="수량(부)" value={requestForm.quantity} onChange={e => setRequestForm({...requestForm, quantity: e.target.value})} required />
+                                        <input type="number" inputMode="numeric" className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="수량" value={requestForm.quantity} onChange={e => setRequestForm({...requestForm, quantity: e.target.value})} required />
                                     </div>
                                     <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="연락처 (010-0000-0000)" value={requestForm.phone} onChange={e => setRequestForm({...requestForm, phone: e.target.value})} required />
                                     <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="사무소명 (예: 강남사무소)" value={requestForm.office} onChange={e => setRequestForm({...requestForm, office: e.target.value})} required />
                                     <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black shadow-xl shadow-blue-100 active:scale-95 transition-all text-center flex items-center justify-center gap-2"><Icon name="save" size={18}/> 신청 등록하기</button>
+                                </form>
+                            </div>
+                        ) : activeTab === "inquiries" ? (
+                            /* 사용자 - 문의 및 건의 */
+                            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center animate-in fade-in slide-in-from-bottom-4">
+                                <div className="text-center mb-8">
+                                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner text-center"><Icon name="messageSquare" size={32}/></div>
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight text-center">문의 및 건의사항</h2>
+                                    <p className="text-xs text-slate-400 mt-1 font-medium">자유롭게 의견을 남겨주시면 PM이 확인 후 답변드립니다.</p>
+                                </div>
+                                <form onSubmit={submitInquiry} className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <input className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="사업부명" value={inquiryForm.division} onChange={e => setInquiryForm({...inquiryForm, division: e.target.value})} required />
+                                        <input className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="팀명" value={inquiryForm.team} onChange={e => setInquiryForm({...inquiryForm, team: e.target.value})} required />
+                                    </div>
+                                    <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="담당자명" value={inquiryForm.name} onChange={e => setInquiryForm({...inquiryForm, name: e.target.value})} required />
+                                    <textarea className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-sm h-32 outline-none focus:border-blue-500 text-left resize-none" placeholder="문의나 건의하실 내용을 상세히 적어주세요." value={inquiryForm.content} onChange={e => setInquiryForm({...inquiryForm, content: e.target.value})} required />
+                                    <button className="w-full bg-slate-800 text-white py-5 rounded-2xl font-black shadow-xl active:scale-95 transition-all text-center flex items-center justify-center gap-2">의견 접수하기</button>
                                 </form>
                             </div>
                         ) : (
@@ -597,23 +747,19 @@
                                     <input className="w-full pl-14 pr-6 py-5 bg-white rounded-[2rem] border-none shadow-sm outline-none text-sm font-black focus:ring-4 focus:ring-blue-50 transition-all text-center" placeholder="키워드 검색..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                                 </div>
                                 
-                                {/* 스크롤 개선된 카테고리 탭 영역 */}
-                                {activeTab === "materials" && (
-                                    <div className="w-full overflow-x-auto no-scrollbar py-2">
-                                        <div className="flex gap-2 w-max px-1">
-                                            {['전체', ...categoriesList.map(c => c.name)].map(cat => (
-                                                <button key={cat} onClick={() => setSelectedCategory(cat)} className={`flex-shrink-0 whitespace-nowrap px-5 py-2.5 rounded-full text-[11px] font-black transition-all text-center ${selectedCategory === cat ? "bg-slate-800 text-white shadow-lg scale-105" : "bg-white text-slate-500 border border-slate-100 hover:bg-slate-50"}`}>
-                                                    {cat}
-                                                </button>
-                                            ))}
-                                        </div>
+                                <div className="w-full overflow-x-auto no-scrollbar py-2">
+                                    <div className="flex gap-2 w-max px-1">
+                                        {['전체', ...(activeTab === "materials" ? categoriesList : videoCategoriesList).map(c => c.name)].map(cat => (
+                                            <button key={cat} onClick={() => setSelectedCategory(cat)} className={`flex-shrink-0 whitespace-nowrap px-5 py-2.5 rounded-full text-[11px] font-black transition-all text-center ${selectedCategory === cat ? "bg-slate-800 text-white shadow-lg scale-105" : "bg-white text-slate-500 border border-slate-100 hover:bg-slate-50"}`}>
+                                                {cat}
+                                            </button>
+                                        ))}
                                     </div>
-                                )}
+                                </div>
 
                                 <div className="grid grid-cols-1 gap-4 text-center mt-2">
                                     {filteredDisplay.map(item => (
                                         <div key={item.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-50 text-center active:scale-[0.98] transition-all group overflow-hidden">
-                                            {/* 썸네일 이미지 영역 */}
                                             {item.thumbnail && (
                                                 <div className="mb-4 -mx-6 -mt-6">
                                                     <img src={item.thumbnail} alt={item.title} className="w-full h-40 sm:h-48 object-cover" />
