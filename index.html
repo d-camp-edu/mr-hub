@@ -14,7 +14,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        // setDoc 추가
         import { getFirestore, collection, addDoc, doc, setDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -41,7 +40,16 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
         body { font-family: 'Noto Sans KR', sans-serif; -webkit-tap-highlight-color: transparent; }
+        
+        /* 스크롤바 숨김 (필요한 곳) */
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* 얇고 예쁜 커스텀 스크롤바 (PC 가로 스크롤용) */
+        .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+        
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         input, select, textarea { font-size: 16px !important; }
     </style>
@@ -79,7 +87,8 @@
                 arrowUp: <g><polyline points="18 15 12 9 6 15"/></g>,
                 arrowDown: <g><polyline points="6 9 12 15 18 9"/></g>,
                 settings: <g><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></g>,
-                close: <g><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></g>
+                close: <g><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></g>,
+                messageSquare: <g><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></g>
             };
             return (
                 <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -310,7 +319,7 @@
                 } catch(e) { console.error("순서 업데이트 실패:", e); }
             };
 
-            // 카테고리명 수정 저장 (관련 자료들의 카테고리명도 함께 업데이트)
+            // 카테고리명 수정 저장
             const handleUpdateCategory = async (dbPath, item, newName) => {
                 if (!window.FB || !newName.trim()) return;
                 const finalName = newName.trim();
@@ -321,10 +330,7 @@
                 
                 const { db, appId, doc, updateDoc } = window.FB;
                 try {
-                    // 카테고리명 업데이트
                     await updateDoc(doc(db, `/artifacts/${appId}/public/data/${dbPath}`, item.id), { name: finalName });
-
-                    // 기존 해당 카테고리로 등록된 자료들도 일괄 업데이트
                     const msgsToUpdate = messages.filter(m => m.category === item.name);
                     if (msgsToUpdate.length > 0) {
                         const updatePromises = msgsToUpdate.map(m => 
@@ -399,6 +405,7 @@
 
             const filteredDisplay = useMemo(() => {
                 const isVidTab = activeTab === "videos";
+                // 유튜브 링크가 있거나 isVideo 속성이 있는 데이터를 영상 탭에 표시
                 const list = messages.filter(m => m.category !== "제품 브로슈어" && (m.isVideo === isVidTab || (isVidTab ? m.youtubeUrl : !m.youtubeUrl)));
                 const catMatch = selectedCategory === "전체" ? list : list.filter(m => m.category === selectedCategory);
                 return catMatch.filter(m => m.title.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -439,7 +446,7 @@
                     </header>
 
                     {!isAdminMode && (
-                        <nav className="flex bg-white border-b sticky top-[69px] z-40 p-1 shadow-sm overflow-x-auto no-scrollbar">
+                        <nav className="flex bg-white border-b sticky top-[69px] z-40 p-1 shadow-sm overflow-x-auto custom-scrollbar">
                             <div className="flex w-full">
                                 <button onClick={() => { setActiveTab("requests"); setSelectedCategory("전체"); }} className={`flex-1 py-3 px-2 text-[11px] whitespace-nowrap font-black rounded-xl transition-all ${activeTab === "requests" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>신청</button>
                                 <button onClick={() => { setActiveTab("materials"); setSelectedCategory("전체"); }} className={`flex-1 py-3 px-2 text-[11px] whitespace-nowrap font-black rounded-xl transition-all ${activeTab === "materials" ? "bg-blue-50 text-blue-600 shadow-inner" : "text-slate-400"}`}>자료실</button>
@@ -453,12 +460,12 @@
                         {isAdminMode ? (
                             <div className="space-y-4 animate-in fade-in">
                                 {/* PM Dashboard */}
-                                <div className="bg-white p-6 rounded-3xl border border-blue-50 text-center shadow-sm">
-                                    <h2 className="font-black text-lg mb-4 text-blue-600 uppercase tracking-widest"><Icon name="settings" size={20} className="inline mr-2"/>보안 및 관리</h2>
-                                    <div className="flex items-center gap-2 mb-4 bg-slate-50 p-3 rounded-2xl border">
-                                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">MR 암호:</span>
-                                        <input className="flex-1 p-2 bg-white border rounded-xl text-sm font-black text-center outline-none" value={newMrPassword} onChange={e=>setNewMrPassword(e.target.value)} />
-                                        <button onClick={handleUpdateMrPassword} className="bg-slate-800 text-white px-3 py-2 rounded-xl text-[11px] font-black">변경</button>
+                                <div className="bg-white p-6 rounded-3xl border border-blue-50 shadow-sm text-left">
+                                    <h2 className="font-black text-lg mb-4 text-blue-600 uppercase tracking-widest text-center sm:text-left"><Icon name="settings" size={20} className="inline mr-2"/>보안 및 관리</h2>
+                                    <div className="flex items-center gap-2 mb-4 bg-slate-50 p-3 rounded-2xl border w-full overflow-hidden">
+                                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap shrink-0">MR 암호:</span>
+                                        <input className="flex-1 min-w-0 p-2 bg-white border rounded-xl text-sm font-black text-center outline-none" value={newMrPassword} onChange={e=>setNewMrPassword(e.target.value)} />
+                                        <button onClick={handleUpdateMrPassword} className="bg-slate-800 text-white px-3 py-2 rounded-xl text-[11px] font-black shrink-0 whitespace-nowrap">변경</button>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <button onClick={downloadExcel} className="w-full bg-green-600 text-white py-3 rounded-2xl text-xs font-black shadow-md flex items-center justify-center gap-1"><Icon name="excel" size={16}/> 엑셀 다운</button>
@@ -469,7 +476,7 @@
                                 {/* Admin Tabs */}
                                 <div className="flex flex-wrap bg-slate-200 p-1 rounded-2xl gap-1">
                                     {[
-                                        {id:'requests', lbl:'신청'}, {id:'inquiries', lbl:'문의'}, {id:'brochures', lbl:'품목'}, 
+                                        {id:'requests', lbl:'신청'}, {id:'inquiries', lbl:'문의'}, {id:'brochures', lbl:'브로셔'}, 
                                         {id:'categories', lbl:'자료분류'}, {id:'vidCats', lbl:'영상분류'}, {id:'materials', lbl:'자료업로드'}, 
                                         {id:'videos', lbl:'영상업로드'}, {id:'logs', lbl:'로그'}
                                     ].map(t => (
@@ -498,19 +505,19 @@
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
                                             <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">자료실 탭에 보일 카테고리 목록</div>
-                                            <div className="divide-y max-h-[400px] overflow-y-auto no-scrollbar">
+                                            <div className="divide-y max-h-[400px] overflow-y-auto custom-scrollbar">
                                                 {categoriesList.map((item, index) => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center text-left">
                                                         {editingCategoryId === item.id ? (
                                                             <input 
-                                                                className="flex-1 p-2 bg-white border border-blue-500 rounded-lg text-sm font-bold outline-none mr-2"
+                                                                className="flex-1 p-2 bg-white border border-blue-500 rounded-lg text-sm font-bold outline-none mr-2 min-w-0"
                                                                 value={editingCategoryName}
                                                                 onChange={(e) => setEditingCategoryName(e.target.value)}
                                                             />
                                                         ) : (
-                                                            <span className="font-bold text-sm text-slate-800">{item.name}</span>
+                                                            <span className="font-bold text-sm text-slate-800 break-all">{item.name}</span>
                                                         )}
-                                                        <div className="flex items-center gap-1">
+                                                        <div className="flex items-center gap-1 shrink-0">
                                                             {editingCategoryId === item.id ? (
                                                                 <>
                                                                     <button onClick={() => handleUpdateCategory('categories', item, editingCategoryName)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg"><Icon name="checkCircle" size={16}/></button>
@@ -527,7 +534,6 @@
                                                         </div>
                                                     </div>
                                                 ))}
-                                                {categoriesList.length === 0 && <p className="p-10 text-center text-slate-300 font-bold italic">등록된 카테고리가 없습니다.</p>}
                                             </div>
                                         </div>
                                     </div>
@@ -552,19 +558,19 @@
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
                                             <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">영상 탭에 보일 카테고리 목록</div>
-                                            <div className="divide-y max-h-[400px] overflow-y-auto no-scrollbar">
+                                            <div className="divide-y max-h-[400px] overflow-y-auto custom-scrollbar">
                                                 {videoCategoriesList.map((item, index) => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center text-left">
                                                         {editingCategoryId === item.id ? (
                                                             <input 
-                                                                className="flex-1 p-2 bg-white border border-blue-500 rounded-lg text-sm font-bold outline-none mr-2"
+                                                                className="flex-1 p-2 bg-white border border-blue-500 rounded-lg text-sm font-bold outline-none mr-2 min-w-0"
                                                                 value={editingCategoryName}
                                                                 onChange={(e) => setEditingCategoryName(e.target.value)}
                                                             />
                                                         ) : (
-                                                            <span className="font-bold text-sm text-slate-800">{item.name}</span>
+                                                            <span className="font-bold text-sm text-slate-800 break-all">{item.name}</span>
                                                         )}
-                                                        <div className="flex items-center gap-1">
+                                                        <div className="flex items-center gap-1 shrink-0">
                                                             {editingCategoryId === item.id ? (
                                                                 <>
                                                                     <button onClick={() => handleUpdateCategory('videoCategories', item, editingCategoryName)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg"><Icon name="checkCircle" size={16}/></button>
@@ -591,7 +597,7 @@
                                 {activeTab === 'brochures' && (
                                     <div className="space-y-4 animate-in fade-in">
                                         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                                            <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">신청 폼 품목 추가</h3>
+                                            <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">신청 폼 브로셔 품목 추가</h3>
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
                                                 if(!window.FB || !newBrochureName.trim()) return;
@@ -605,8 +611,8 @@
                                             </form>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
-                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">등록된 신청 품목</div>
-                                            <div className="divide-y max-h-[400px] overflow-y-auto no-scrollbar">
+                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">등록된 신청 브로셔 목록</div>
+                                            <div className="divide-y max-h-[400px] overflow-y-auto custom-scrollbar">
                                                 {messages.filter(m => m.category === "제품 브로슈어").map(item => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center text-left">
                                                         <span className="font-bold text-sm text-slate-800">{item.title}</span>
@@ -673,15 +679,15 @@
 
                                         <div className="mt-8 border-t pt-4">
                                             <div className="font-black text-xs text-slate-400 mb-4 text-center">등록된 항목 관리</div>
-                                            <div className="divide-y max-h-[300px] overflow-y-auto no-scrollbar">
-                                                {(activeTab === 'videos' ? messages.filter(m => m.isVideo) : messages.filter(m => !m.isVideo && m.category !== '제품 브로슈어')).map(item => (
+                                            <div className="divide-y max-h-[300px] overflow-y-auto custom-scrollbar">
+                                                {(activeTab === 'videos' ? messages.filter(m => m.isVideo || m.youtubeUrl) : messages.filter(m => !m.isVideo && m.category !== '제품 브로슈어' && !m.youtubeUrl)).map(item => (
                                                     <div key={item.id} className="py-3 flex justify-between items-center text-left gap-3">
                                                         {item.thumbnail && <img src={item.thumbnail} className="w-10 h-10 object-cover rounded-lg shadow-sm" alt="thumb"/>}
                                                         <div className="flex-1 pr-2">
                                                             <span className="text-[9px] font-black text-blue-400 uppercase">{item.category}</span>
                                                             <p className="font-black text-slate-800 text-xs line-clamp-1">{item.title}</p>
                                                         </div>
-                                                        <div className="flex gap-1">
+                                                        <div className="flex gap-1 shrink-0">
                                                             <button onClick={() => { setEditingId(item.id); setFormState({title: item.title||"", category: item.category||"", description: item.description||"", pdfUrl: item.pdfUrl||"", pptUrl: item.pptUrl||"", youtubeUrl: item.youtubeUrl||"", thumbnail: item.thumbnail||""}); window.scrollTo(0,0); }} className="p-2 text-slate-400 hover:text-blue-600"><Icon name="edit" size={16}/></button>
                                                             <button onClick={() => { if(window.confirm("삭제하시겠습니까?")) window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/messages`, item.id)); }} className="p-2 text-slate-400 hover:text-red-500"><Icon name="trash" size={16}/></button>
                                                         </div>
@@ -696,7 +702,7 @@
                                 {activeTab === 'requests' && (
                                     <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
                                         <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">신청 내역</div>
-                                        <div className="divide-y max-h-[600px] overflow-y-auto no-scrollbar">
+                                        <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar">
                                             {requests.map(req => (
                                                 <div key={req.id} className={`p-5 flex items-center gap-4 transition-all ${req.completed ? 'opacity-40' : ''}`}>
                                                     <button onClick={() => window.FB.updateDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/requests`, req.id), { completed: !req.completed })}>
@@ -719,7 +725,7 @@
                                 {activeTab === 'inquiries' && (
                                     <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
                                         <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">건의 및 문의 내역</div>
-                                        <div className="divide-y max-h-[600px] overflow-y-auto no-scrollbar">
+                                        <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar">
                                             {inquiries.map(inq => (
                                                 <div key={inq.id} className={`p-5 flex items-start gap-4 transition-all ${inq.completed ? 'opacity-40' : ''}`}>
                                                     <button onClick={() => window.FB.updateDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/inquiries`, inq.id), { completed: !inq.completed })} className="mt-1">
@@ -745,7 +751,7 @@
                                             <span className="font-black text-xs text-slate-400 uppercase tracking-widest">최근 접속/활동 로그</span>
                                             <button onClick={fetchRecentLogs} className="bg-blue-100 text-blue-600 px-3 py-1.5 rounded-xl flex items-center gap-1 text-[10px] font-black active:scale-95 transition-transform"><Icon name="refresh" size={14}/> 새로고침</button>
                                         </div>
-                                        <div className="divide-y max-h-[600px] overflow-y-auto no-scrollbar bg-slate-900 text-green-400 font-mono text-xs p-4 space-y-2">
+                                        <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar bg-slate-900 text-green-400 font-mono text-xs p-4 space-y-2">
                                             {recentLogs.length === 0 ? <p className="text-slate-500 italic text-center py-10">로그 데이터가 없습니다.</p> : recentLogs.map(log => (
                                                 <div key={log.id} className="pb-2 border-b border-slate-800">
                                                     <span className="text-slate-500 text-[10px]">[{log.dateString}]</span> <br/>
@@ -786,7 +792,7 @@
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 text-center">
                                         <input className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="신청자명" value={requestForm.requesterName} onChange={e => setRequestForm({...requestForm, requesterName: e.target.value})} required />
-                                        <input type="number" inputMode="numeric" className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="수량" value={requestForm.quantity} onChange={e => setRequestForm({...requestForm, quantity: e.target.value})} required />
+                                        <input type="number" inputMode="numeric" className="p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="수량(부)" value={requestForm.quantity} onChange={e => setRequestForm({...requestForm, quantity: e.target.value})} required />
                                     </div>
                                     <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="연락처 (010-0000-0000)" value={requestForm.phone} onChange={e => setRequestForm({...requestForm, phone: e.target.value})} required />
                                     <input className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold text-center text-sm outline-none focus:border-blue-500" placeholder="사무소명 (예: 강남사무소)" value={requestForm.office} onChange={e => setRequestForm({...requestForm, office: e.target.value})} required />
@@ -819,7 +825,7 @@
                                     <input className="w-full pl-14 pr-6 py-5 bg-white rounded-[2rem] border-none shadow-sm outline-none text-sm font-black focus:ring-4 focus:ring-blue-50 transition-all text-center" placeholder="키워드 검색..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                                 </div>
                                 
-                                <div className="w-full overflow-x-auto no-scrollbar py-2">
+                                <div className="w-full overflow-x-auto custom-scrollbar py-2">
                                     <div className="flex gap-2 w-max px-1">
                                         {['전체', ...(activeTab === "materials" ? categoriesList : videoCategoriesList).map(c => c.name)].map(cat => (
                                             <button key={cat} onClick={() => setSelectedCategory(cat)} className={`flex-shrink-0 whitespace-nowrap px-5 py-2.5 rounded-full text-[11px] font-black transition-all text-center ${selectedCategory === cat ? "bg-slate-800 text-white shadow-lg scale-105" : "bg-white text-slate-500 border border-slate-100 hover:bg-slate-50"}`}>
