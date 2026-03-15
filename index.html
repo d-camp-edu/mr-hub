@@ -489,7 +489,7 @@
                                 {/* 자료 분류 관리 탭 */}
                                 {activeTab === 'categories' && (
                                     <div className="space-y-4 animate-in fade-in">
-                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden w-full">
                                             <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">자료실 카테고리 추가</h3>
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
@@ -498,9 +498,9 @@
                                                     name: newCategoryName.trim(), order: categoriesList.length, timestamp: Date.now()
                                                 });
                                                 setNewCategoryName("");
-                                            }} className="flex gap-2">
-                                                <input className="flex-1 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="새 자료실 카테고리명" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} required />
-                                                <button type="submit" className="bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
+                                            }} className="flex gap-2 w-full">
+                                                <input className="flex-1 min-w-0 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="새 자료실 카테고리명" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} required />
+                                                <button type="submit" className="shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
                                             </form>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
@@ -542,7 +542,7 @@
                                 {/* 영상 분류 관리 탭 */}
                                 {activeTab === 'vidCats' && (
                                     <div className="space-y-4 animate-in fade-in">
-                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden w-full">
                                             <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">교육 영상 카테고리 추가</h3>
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
@@ -551,9 +551,9 @@
                                                     name: newVideoCategoryName.trim(), order: videoCategoriesList.length, timestamp: Date.now()
                                                 });
                                                 setNewVideoCategoryName("");
-                                            }} className="flex gap-2">
-                                                <input className="flex-1 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="새 교육영상 카테고리명" value={newVideoCategoryName} onChange={e => setNewVideoCategoryName(e.target.value)} required />
-                                                <button type="submit" className="bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
+                                            }} className="flex gap-2 w-full">
+                                                <input className="flex-1 min-w-0 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="새 교육영상 카테고리명" value={newVideoCategoryName} onChange={e => setNewVideoCategoryName(e.target.value)} required />
+                                                <button type="submit" className="shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
                                             </form>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
@@ -596,7 +596,7 @@
                                 {/* 브로슈어 품목 관리 탭 */}
                                 {activeTab === 'brochures' && (
                                     <div className="space-y-4 animate-in fade-in">
-                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden w-full">
                                             <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">신청 폼 브로셔 품목 추가</h3>
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
@@ -605,9 +605,9 @@
                                                     title: newBrochureName.trim(), category: "제품 브로슈어", description: "브로슈어 신청 전용 품목입니다.", pdfUrl: "", pptUrl: "", youtubeUrl: "", timestamp: Date.now()
                                                 });
                                                 setNewBrochureName("");
-                                            }} className="flex gap-2">
-                                                <input className="flex-1 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="예: 24년형 메인 리플렛" value={newBrochureName} onChange={e => setNewBrochureName(e.target.value)} required />
-                                                <button type="submit" className="bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
+                                            }} className="flex gap-2 w-full">
+                                                <input className="flex-1 min-w-0 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="예: 24년형 메인 리플렛" value={newBrochureName} onChange={e => setNewBrochureName(e.target.value)} required />
+                                                <button type="submit" className="shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
                                             </form>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
