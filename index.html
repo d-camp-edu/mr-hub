@@ -18,7 +18,6 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, doc, setDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // PM님 파이어베이스 설정값
         const firebaseConfig = {
             apiKey: "AIzaSyB475AzDr96EP6I7YsyZx3OjnYDMuMaq7k",
             authDomain: "diabetes-sales.firebaseapp.com",
@@ -31,8 +30,6 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        
-        // ★ 중요: 이전 데이터 복구를 위해 버전을 v3로 원복했습니다.
         const appId = "dm-team-mr-hub-v3"; 
 
         window.FB = { 
@@ -60,7 +57,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useCallback } = React;
 
-        // --- SVG 아이콘 컴포넌트 ---
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 search: <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>,
@@ -101,7 +97,6 @@
             );
         };
 
-        // ★ PM 관리자 접속 비밀번호 설정
         const ADMIN_PASSWORD = "1024";
 
         const App = () => {
@@ -128,7 +123,6 @@
             const [categoriesList, setCategoriesList] = useState([]);
             const [videoCategoriesList, setVideoCategoriesList] = useState([]);
             
-            // ★ MR 접속 비밀번호 초기 상태 설정
             const [mrPassword, setMrPassword] = useState("1111");
             const [quizConfig, setQuizConfig] = useState({ question: "ㅈㄴㅂㅇ", isActive: true });
             
@@ -137,7 +131,6 @@
             const [adminPasswordInput, setAdminPasswordInput] = useState("");
             const [newMrPassword, setNewMrPassword] = useState("1111");
             
-            // 카테고리 편집 상태
             const [editingCategoryId, setEditingCategoryId] = useState(null);
             const [editingCategoryName, setEditingCategoryName] = useState("");
 
@@ -151,12 +144,14 @@
             const [newBrochureName, setNewBrochureName] = useState("");
             const [quizSettingForm, setQuizSettingForm] = useState({ question: "", isActive: true });
             
-            const [form301Info, setForm301Info] = useState({ division: "", team: "", name: "", phone: "" });
+            // 301 Form 상태 (제목, 장소, 날짜 추가)
+            const [form301Info, setForm301Info] = useState({ title: "", date: "", location: "", division: "", team: "", name: "", phone: "" });
             const [form301Account, setForm301Account] = useState({ accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "" });
             const [local301List, setLocal301List] = useState([]);
-            const [sympForm, setSympForm] = useState({ symposiumName: "", division: "", team: "", name: "", accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "" });
+            
+            // 심포지엄 Form 상태 (연락처, 닥터명, 닥터연락처, 요청사항 추가)
+            const [sympForm, setSympForm] = useState({ symposiumName: "", division: "", team: "", name: "", phone: "", accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorName: "", doctorPhone: "", memo: "" });
 
-            // 파이어베이스 접속 시도
             useEffect(() => {
                 const init = setInterval(() => {
                     if (window.FB) {
@@ -169,13 +164,11 @@
                 }, 500);
             }, []);
 
-            // 실시간 데이터 불러오기
             useEffect(() => {
                 if (!user || !window.FB) return;
                 const { db, appId, collection, doc, setDoc, onSnapshot } = window.FB;
                 const base = `/artifacts/${appId}/public/data/`;
 
-                // MR 비밀번호 동기화 (설정이 아예 없으면 1111로 기본 생성)
                 const unsubSettings = onSnapshot(doc(db, `${base}settings`, 'config'), (docSnap) => {
                     if (docSnap.exists()) {
                         setMrPassword(docSnap.data().mrPassword || "1111");
@@ -217,7 +210,6 @@
                 return () => { unsubSettings(); unsubQuiz(); listeners.forEach(unsub => unsub()); };
             }, [user, isAdminMode]);
 
-            // 로그 실시간으로 가져오기 헬퍼 (로그는 데이터가 많아질 수 있으니 별도 처리)
             const fetchRecentLogs = useCallback(async () => {
                 if (!user || !window.FB || !isAdminMode) return;
                 const { db, appId, collection, getDocs, query, orderBy, limit } = window.FB;
@@ -227,7 +219,6 @@
                 setRecentLogs(snap.docs.map(d => ({id: d.id, ...d.data()})));
             }, [user, isAdminMode]);
 
-            // 로그인
             const handleUserLogin = (e) => {
                 e.preventDefault();
                 if (!/^\d{6}$/.test(loginEmpId)) return alert("사번 6자리를 숫자로 입력하세요.");
@@ -238,14 +229,12 @@
                 logAction("접속", "시스템 로그인");
             };
 
-            // 로그아웃
             const handleLogout = () => {
                 sessionStorage.removeItem('mr_emp_id');
                 setEmpId(""); setLoginEmpId(""); setLoginPassword("");
                 setIsLoggedIn(false); setIsAdminMode(false);
             };
 
-            // 행동 로그 저장
             const logAction = async (actionType, targetTitle) => {
                 if (!user || !window.FB) return;
                 try {
@@ -256,19 +245,16 @@
                 } catch (e) { console.error(e); }
             };
 
-            // 상태 체크/해제
             const toggleStatus = async (collectionName, itemId, currentStatus) => {
                 if (!user || !window.FB) return;
                 await window.FB.updateDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', collectionName, itemId), { completed: !currentStatus });
             };
 
-            // 삭제
             const deleteItem = async (collectionName, itemId) => {
                 if (!user || !window.FB || !window.confirm("정말 삭제하시겠습니까?")) return;
                 await window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', collectionName, itemId));
             };
 
-            // 카테고리 순서 이동
             const moveCategory = async (list, dbPath, index, direction) => {
                 if (!window.FB) return;
                 const newIndex = index + direction;
@@ -284,48 +270,34 @@
 
                 const { db, appId, doc, updateDoc } = window.FB;
                 try {
-                    await Promise.all(newList.map((item, i) => 
-                        updateDoc(doc(db, `/artifacts/${appId}/public/data/${dbPath}`, item.id), { order: i })
-                    ));
+                    await Promise.all(newList.map((item, i) => updateDoc(doc(db, `/artifacts/${appId}/public/data/${dbPath}`, item.id), { order: i })));
                 } catch(e) { console.error("순서 업데이트 실패:", e); }
             };
 
-            // 카테고리 명 수정
             const handleUpdateCategory = async (dbPath, item, newName) => {
                 if (!window.FB || !newName.trim()) return;
                 const finalName = newName.trim();
-                if (item.name === finalName) {
-                    setEditingCategoryId(null);
-                    return;
-                }
+                if (item.name === finalName) return setEditingCategoryId(null);
                 
                 const { db, appId, doc, updateDoc } = window.FB;
                 try {
                     await updateDoc(doc(db, `/artifacts/${appId}/public/data/${dbPath}`, item.id), { name: finalName });
-                    
-                    // 기존 자료들 카테고리 일괄 변경
                     const msgsToUpdate = messages.filter(m => m.category === item.name);
                     if (msgsToUpdate.length > 0) {
-                        const updatePromises = msgsToUpdate.map(m => 
-                            updateDoc(doc(db, `/artifacts/${appId}/public/data/messages`, m.id), { category: finalName })
-                        );
+                        const updatePromises = msgsToUpdate.map(m => updateDoc(doc(db, `/artifacts/${appId}/public/data/messages`, m.id), { category: finalName }));
                         await Promise.all(updatePromises);
                     }
                     alert("카테고리명이 수정되었습니다.");
-                } catch (error) {
-                    console.error(error);
-                }
+                } catch (error) { console.error(error); }
                 setEditingCategoryId(null);
             };
 
-            // 엑셀 다운로드 (다중 시트 분리)
             const handleDownloadExcel = async () => {
                 if (!window.XLSX) return alert("엑셀 모듈 로딩 중입니다. 잠시 후 시도해주세요.");
                 try {
                     const wb = window.XLSX.utils.book_new();
                     const sortAsc = (arr) => [...arr].sort((a,b) => a.timestamp - b.timestamp);
 
-                    // 전체 로그 가져오기
                     const logSnap = await window.FB.getDocs(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/logs`));
                     const allLogs = logSnap.docs.map(d => d.data());
 
@@ -335,23 +307,32 @@
                     const reqData = sortAsc(requests).map(r => ({ 사번: r.empId, 성함: r.requesterName, 연락처: r.phone, 사무소: r.office, 거래처명: r.accountName, 거래처코드: r.accountCode, 품목: r.brochureName, 수량: r.quantity, 상태: r.completed ? "배송완료" : "준비중", 일시: r.dateString }));
                     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(reqData), "브로슈어신청");
 
-                    const r301Data = sortAsc(requests301).map(r => ({ 사번: r.empId, 사업부: r.division, 팀: r.team, 담당자: r.name, 연락처: r.phone, 거래처명: r.accountName, 거래처코드: r.accountCode, 타겟품목: r.targetProduct, 처방금액: r.rxAmount, 상태: r.completed ? "처리완료" : "대기", 일시: r.dateString }));
+                    // 301 다기관 설명회
+                    const r301Data = sortAsc(requests301).map(r => ({ 신청제목: r.title, 진행날짜: r.date, 진행장소: r.location, 사번: r.empId, 사업부: r.division, 팀: r.team, 담당자: r.name, 연락처: r.phone, 거래처명: r.accountName, 거래처코드: r.accountCode, 타겟품목: r.targetProduct, 처방금액: r.rxAmount, 상태: r.completed ? "처리완료" : "대기", 일시: r.dateString }));
                     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(r301Data), "301설명회");
 
-                    const sympData = sortAsc(sympRequests).map(r => ({ 심포지엄명: r.symposiumName, 사번: r.empId, 사업부: r.division, 팀: r.team, 담당자: r.name, 거래처명: r.accountName, 거래처코드: r.accountCode, 타겟품목: r.targetProduct, 처방금액: r.rxAmount, 상태: r.completed ? "처리완료" : "대기", 일시: r.dateString }));
+                    // 심포지엄 모객
+                    const sympData = sortAsc(sympRequests).map(r => ({ 심포지엄명: r.symposiumName, 사번: r.empId, 사업부: r.division, 팀: r.team, 담당자: r.name, 연락처: r.phone, 거래처명: r.accountName, 거래처코드: r.accountCode, 타겟품목: r.targetProduct, 처방금액: r.rxAmount, 모객닥터명: r.doctorName, 닥터연락처: r.doctorPhone, 요청사항: r.memo, 상태: r.completed ? "처리완료" : "대기", 일시: r.dateString }));
                     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(sympData), "심포지엄모객");
 
+                    // 문의/건의
                     const inqData = sortAsc(inquiries).map(i => ({ 사번: i.empId, 사업부: i.division, 팀: i.team, 담당자: i.name, 내용: i.content, 상태: i.completed ? "답변/처리완료" : "대기중", 일시: i.dateString }));
                     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(inqData), "문의건의");
 
-                    const quizLogs = sortAsc(allLogs.filter(l => l.action === "퀴즈 참여")).map(q => ({ 사번: q.empId, 전체내용: q.target, 일시: q.dateString }));
+                    // 퀴즈 로깅 분리
+                    const quizLogs = sortAsc(allLogs.filter(l => l.action === "퀴즈 참여")).map(q => {
+                        const match = q.target.match(/\[(.*?)\/(.*?)\/(.*?)\] 답안: (.*)/);
+                        if (match) {
+                            return { 사번: q.empId, 사업부: match[1], 팀: match[2], 이름: match[3], 제출답안: match[4], 일시: q.dateString };
+                        }
+                        return { 사번: q.empId, 전체내용: q.target, 일시: q.dateString };
+                    });
                     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(quizLogs), "퀴즈참여");
 
                     window.XLSX.writeFile(wb, `DM_HUB_REPORT_${new Date().toISOString().slice(0,10)}.xlsx`);
                 } catch(e) { alert("엑셀 생성 중 오류가 발생했습니다."); }
             };
 
-            // 서브밋 액션들
             const submitQuiz = async (e) => {
                 e.preventDefault();
                 if(!user) return;
@@ -379,6 +360,7 @@
             const submit301All = async () => {
                 if(!user || !window.FB) return;
                 if(local301List.length === 0) return alert("추가된 거래처가 없습니다.");
+                if(!form301Info.title || !form301Info.date || !form301Info.location) return alert("설명회 기본 정보를 모두 입력하세요.");
                 if(!form301Info.division || !form301Info.name) return alert("담당자 정보를 모두 입력하세요.");
                 try {
                     await Promise.all(local301List.map(acc => 
@@ -386,10 +368,10 @@
                             ...form301Info, ...acc, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR')
                         })
                     ));
-                    logAction("301 설명회 신청", `${local301List.length}건 등록`);
+                    logAction("301 설명회 신청", `[${form301Info.title}] ${local301List.length}건 등록`);
                     alert("301 다기관 설명회 신청이 완료되었습니다.");
                     setLocal301List([]);
-                    setForm301Info({ division: "", team: "", name: "", phone: "" });
+                    setForm301Info({ title: "", date: "", location: "", division: "", team: "", name: "", phone: "" });
                 } catch(e) { alert("오류 발생"); }
             };
 
@@ -399,7 +381,7 @@
                 await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'symposium_requests'), { ...sympForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
                 logAction("심포지엄 모객", sympForm.symposiumName);
                 alert("모객 리스트에 등록되었습니다.");
-                setSympForm({ symposiumName: "", division: "", team: "", name: "", accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "" });
+                setSympForm({ symposiumName: "", division: "", team: "", name: "", phone: "", accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorName: "", doctorPhone: "", memo: "" });
             };
 
             const submitInquiry = async (e) => {
@@ -537,9 +519,13 @@
                                     </button>
                                 </div>
 
+                                {/* 분리된 내역 관리 탭들 */}
                                 <div className="flex flex-wrap bg-slate-200 p-1 rounded-2xl gap-1">
-                                    {[{id:'home', lbl:'홈(퀴즈)'}, {id:'sympList', lbl:'심포지엄목록'}, {id:'categories', lbl:'자료분류'}, {id:'vidCats', lbl:'영상분류'}, {id:'materials', lbl:'자료등록'}, {id:'videos', lbl:'영상등록'}, {id:'reqs', lbl:'내역관리'}].map(t => (
-                                        <button key={t.id} onClick={() => { setActiveTab(t.id); setEditingId(null); if(t.id==='logs') fetchRecentLogs(); }} className={`flex-1 min-w-[70px] py-2 px-1 text-[10px] font-black rounded-xl transition-all ${activeTab === t.id ? 'bg-white shadow-md text-blue-600' : 'text-slate-500 hover:bg-slate-300'}`}>
+                                    {[
+                                        {id:'home', lbl:'홈(퀴즈)'}, {id:'brochures', lbl:'브로셔관리'}, {id:'reqs301', lbl:'301관리'}, {id:'sympList', lbl:'심포지엄관리'}, {id:'inquiries', lbl:'문의관리'},
+                                        {id:'categories', lbl:'자료분류'}, {id:'vidCats', lbl:'영상분류'}, {id:'materials', lbl:'자료등록'}, {id:'videos', lbl:'영상등록'}, {id:'logs', lbl:'로그'}
+                                    ].map(t => (
+                                        <button key={t.id} onClick={() => { setActiveTab(t.id); setEditingId(null); if(t.id==='logs') fetchRecentLogs(); }} className={`flex-1 min-w-[65px] py-2 px-1 text-[10px] sm:text-[11px] font-black rounded-xl transition-all ${activeTab === t.id ? 'bg-white shadow-md text-blue-600' : 'text-slate-500 hover:bg-slate-300'}`}>
                                             {t.lbl}
                                         </button>
                                     ))}
@@ -556,18 +542,86 @@
                                     </div>
                                 )}
 
-                                {/* Admin: 심포지엄 목록 관리 */}
+                                {/* Admin: 브로셔 관리 (품목 추가 + 신청 내역) */}
+                                {activeTab === 'brochures' && (
+                                    <div className="space-y-4 animate-in fade-in">
+                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden w-full">
+                                            <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">신청 폼 브로셔 품목 추가</h3>
+                                            <form onSubmit={async (e) => {
+                                                e.preventDefault();
+                                                if(!window.FB || !newBrochureName.trim()) return;
+                                                await window.FB.addDoc(window.FB.collection(window.FB.db, `/artifacts/${window.FB.appId}/public/data/messages`), {
+                                                    title: newBrochureName.trim(), category: "제품 브로슈어", description: "브로슈어 신청 전용 품목입니다.", pdfUrl: "", pptUrl: "", youtubeUrl: "", timestamp: Date.now()
+                                                });
+                                                setNewBrochureName("");
+                                            }} className="flex gap-2 w-full">
+                                                <input className="flex-1 min-w-0 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="예: 24년형 메인 리플렛" value={newBrochureName} onChange={e => setNewBrochureName(e.target.value)} required />
+                                                <button type="submit" className="shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
+                                            </form>
+                                        </div>
+                                        <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
+                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">등록된 신청 품목</div>
+                                            <div className="divide-y max-h-[200px] overflow-y-auto custom-scrollbar">
+                                                {messages.filter(m => m.category === "제품 브로슈어").map(item => (
+                                                    <div key={item.id} className="p-4 flex justify-between items-center text-left">
+                                                        <span className="font-bold text-sm text-slate-800">{item.title}</span>
+                                                        <button onClick={() => window.confirm("삭제하시겠습니까?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `/artifacts/${window.FB.appId}/public/data/messages`, item.id))} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash" size={18}/></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
+                                            <div className="p-4 bg-blue-50 font-black text-xs text-blue-600 border-b">브로셔 신청 내역 (체크 시 발송 완료 처리)</div>
+                                            <div className="divide-y max-h-[400px] overflow-y-auto custom-scrollbar">
+                                                {requests.map(item => (
+                                                    <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
+                                                        <button onClick={() => toggleStatus('requests', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
+                                                        <div className="flex-1">
+                                                            <p className={`text-sm font-bold mt-1 ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>{item.brochureName} ({item.quantity}부)</p>
+                                                            <p className="text-[10px] text-slate-500">{item.accountName} | {item.requesterName}({item.empId}) | {item.phone}</p>
+                                                        </div>
+                                                        <button onClick={() => deleteItem('requests', item.id)} className="text-red-400"><Icon name="trash" size={16}/></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Admin: 301 관리 탭 */}
+                                {activeTab === 'reqs301' && (
+                                    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
+                                        <div className="p-4 bg-orange-50 font-black text-xs text-orange-600 border-b">301 다기관 설명회 신청 내역 (체크 시 완료 처리)</div>
+                                        <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar">
+                                            {requests301.map(item => (
+                                                <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
+                                                    <button onClick={() => toggleStatus('requests_301', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
+                                                    <div className="flex-1">
+                                                        <p className={`text-sm font-bold mt-1 ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{item.title}] {item.accountName} ({item.targetProduct}) - ₩{item.rxAmount}</p>
+                                                        <p className="text-[10px] text-slate-500">진행: {item.date} | 장소: {item.location}</p>
+                                                        <p className="text-[10px] text-slate-500">신청: {item.division} {item.team} {item.name}({item.empId}) | 연락처: {item.phone}</p>
+                                                    </div>
+                                                    <button onClick={() => deleteItem('requests_301', item.id)} className="text-red-400"><Icon name="trash" size={16}/></button>
+                                                </div>
+                                            ))}
+                                            {requests301.length === 0 && <p className="py-10 text-center text-slate-400 italic font-bold">내역이 없습니다.</p>}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Admin: 심포지엄 관리 (목록 추가 + 신청 내역) */}
                                 {activeTab === 'sympList' && (
-                                    <div className="space-y-4">
-                                        <div className="bg-white p-6 rounded-[2rem] border shadow-sm">
-                                            <h3 className="font-black text-xs mb-4 text-slate-400">모객용 심포지엄 추가</h3>
+                                    <div className="space-y-4 animate-in fade-in">
+                                        <div className="bg-white p-6 rounded-[2rem] border shadow-sm w-full overflow-hidden">
+                                            <h3 className="font-black text-xs mb-4 text-slate-400 text-center">모객용 심포지엄 추가</h3>
                                             <div className="flex gap-2 w-full">
                                                 <input className="flex-1 min-w-0 p-3 bg-slate-50 border rounded-xl text-sm font-bold" placeholder="심포지엄명 (예: 24년 춘계 학술대회)" value={newSymposiumName} onChange={e => setNewSymposiumName(e.target.value)} />
                                                 <button onClick={async () => { if(!newSymposiumName || !window.FB) return; await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'symposium_list'), { name: newSymposiumName, timestamp: Date.now() }); setNewSymposiumName(""); }} className="shrink-0 bg-blue-600 text-white px-4 rounded-xl"><Icon name="plus" size={18}/></button>
                                             </div>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden">
-                                            <div className="divide-y max-h-[300px] overflow-y-auto custom-scrollbar">
+                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">심포지엄 목록</div>
+                                            <div className="divide-y max-h-[200px] overflow-y-auto custom-scrollbar">
                                                 {symposiumList.map(item => (
                                                     <div key={item.id} className="p-4 flex justify-between">
                                                         <span className="font-bold text-sm">{item.name}</span>
@@ -575,6 +629,43 @@
                                                     </div>
                                                 ))}
                                             </div>
+                                        </div>
+                                        <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
+                                            <div className="p-4 bg-green-50 font-black text-xs text-green-600 border-b">심포지엄 모객 신청 내역 (체크 시 완료 처리)</div>
+                                            <div className="divide-y max-h-[400px] overflow-y-auto custom-scrollbar">
+                                                {sympRequests.map(item => (
+                                                    <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
+                                                        <button onClick={() => toggleStatus('symposium_requests', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
+                                                        <div className="flex-1">
+                                                            <p className={`text-sm font-bold mt-1 ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{item.symposiumName}] {item.accountName} ({item.targetProduct}: ₩{item.rxAmount})</p>
+                                                            <p className="text-[10px] text-slate-600">닥터: {item.doctorName} ({item.doctorPhone})</p>
+                                                            <p className="text-[10px] text-slate-500">신청: {item.division} {item.team} {item.name}({item.empId}) | {item.phone}</p>
+                                                            {item.memo && <p className="text-[10px] bg-slate-100 p-2 rounded mt-1 text-slate-600">요청: {item.memo}</p>}
+                                                        </div>
+                                                        <button onClick={() => deleteItem('symposium_requests', item.id)} className="text-red-400"><Icon name="trash" size={16}/></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Admin: 문의 관리 탭 */}
+                                {activeTab === 'inquiries' && (
+                                    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
+                                        <div className="p-4 bg-purple-50 font-black text-xs text-purple-600 border-b">문의 및 건의 내역 (체크 시 답변완료 처리)</div>
+                                        <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar">
+                                            {inquiries.map(item => (
+                                                <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
+                                                    <button onClick={() => toggleStatus('inquiries', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
+                                                    <div className="flex-1">
+                                                        <p className={`text-sm font-bold mt-1 ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{item.division} {item.team}] {item.name}({item.empId})</p>
+                                                        <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap bg-slate-50 p-3 rounded-xl border">{item.content}</p>
+                                                    </div>
+                                                    <button onClick={() => deleteItem('inquiries', item.id)} className="text-red-400"><Icon name="trash" size={16}/></button>
+                                                </div>
+                                            ))}
+                                            {inquiries.length === 0 && <p className="py-10 text-center text-slate-400 italic font-bold">문의 내역이 없습니다.</p>}
                                         </div>
                                     </div>
                                 )}
@@ -759,53 +850,18 @@
                                     </div>
                                 )}
 
-                                {/* 통합 내역 관리 탭 */}
-                                {activeTab === 'reqs' && (
-                                    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
-                                        <div className="p-4 bg-slate-50 font-black text-xs text-slate-500 border-b">통합 접수 내역 (체크 시 완료 처리)</div>
-                                        <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar">
-                                            {inquiries.map(item => (
-                                                <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
-                                                    <button onClick={() => toggleStatus('inquiries', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
-                                                    <div className="flex-1">
-                                                        <span className="text-[10px] font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded">문의/건의</span>
-                                                        <p className={`text-sm font-bold mt-1 ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{item.division} {item.team}] {item.name}({item.empId})</p>
-                                                        <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">{item.content}</p>
-                                                    </div>
-                                                    <button onClick={() => deleteItem('inquiries', item.id)} className="text-red-400"><Icon name="trash" size={16}/></button>
-                                                </div>
-                                            ))}
-                                            {requests.map(item => (
-                                                <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
-                                                    <button onClick={() => toggleStatus('requests', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
-                                                    <div className="flex-1">
-                                                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded">브로슈어</span>
-                                                        <p className={`text-sm font-bold mt-1 ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>{item.brochureName} ({item.quantity}부)</p>
-                                                        <p className="text-[10px] text-slate-500">{item.accountName} | {item.requesterName}({item.empId})</p>
-                                                    </div>
-                                                    <button onClick={() => deleteItem('requests', item.id)} className="text-red-400"><Icon name="trash" size={16}/></button>
-                                                </div>
-                                            ))}
-                                            {requests301.map(item => (
-                                                <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
-                                                    <button onClick={() => toggleStatus('requests_301', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
-                                                    <div className="flex-1">
-                                                        <span className="text-[10px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded">301설명회</span>
-                                                        <p className={`text-sm font-bold mt-1 ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>{item.accountName} ({item.targetProduct}) - ₩{item.rxAmount}</p>
-                                                        <p className="text-[10px] text-slate-500">{item.division} {item.name}({item.empId})</p>
-                                                    </div>
-                                                    <button onClick={() => deleteItem('requests_301', item.id)} className="text-red-400"><Icon name="trash" size={16}/></button>
-                                                </div>
-                                            ))}
-                                            {sympRequests.map(item => (
-                                                <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
-                                                    <button onClick={() => toggleStatus('symposium_requests', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
-                                                    <div className="flex-1">
-                                                        <span className="text-[10px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded">심포지엄</span>
-                                                        <p className={`text-sm font-bold mt-1 ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{item.symposiumName}] {item.accountName}</p>
-                                                        <p className="text-[10px] text-slate-500">{item.division} {item.name}({item.empId})</p>
-                                                    </div>
-                                                    <button onClick={() => deleteItem('symposium_requests', item.id)} className="text-red-400"><Icon name="trash" size={16}/></button>
+                                {/* 실시간 로그 탭 */}
+                                {activeTab === 'logs' && (
+                                    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
+                                        <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                                            <span className="font-black text-xs text-slate-400 uppercase tracking-widest">최근 접속/활동 로그</span>
+                                            <button onClick={fetchRecentLogs} className="bg-blue-100 text-blue-600 px-3 py-1.5 rounded-xl flex items-center gap-1 text-[10px] font-black active:scale-95 transition-transform"><Icon name="refresh" size={14}/> 새로고침</button>
+                                        </div>
+                                        <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar bg-slate-900 text-green-400 font-mono text-xs p-4 space-y-2">
+                                            {recentLogs.length === 0 ? <p className="text-slate-500 italic text-center py-10">로그 데이터가 없습니다.</p> : recentLogs.map(log => (
+                                                <div key={log.id} className="pb-2 border-b border-slate-800">
+                                                    <span className="text-slate-500 text-[10px]">[{log.dateString}]</span> <br/>
+                                                    <span className="text-blue-400 font-bold">MR_{log.empId}</span> | {log.action} : {log.target}
                                                 </div>
                                             ))}
                                         </div>
@@ -887,7 +943,16 @@
                                         <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center justify-center gap-2"><Icon name="users" size={24} className="text-orange-500"/> 301 다기관 설명회 신청</h2>
                                         
                                         <div className="bg-orange-50 p-4 rounded-2xl mb-6 space-y-3">
-                                            <p className="text-xs font-bold text-orange-700 text-left">1. 담당자 정보 입력</p>
+                                            <p className="text-xs font-bold text-orange-700 text-left">1. 기본 정보 입력</p>
+                                            <input className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="설명회 제목 (예: 서울 강남권 301 설명회)" value={form301Info.title} onChange={e=>setForm301Info({...form301Info, title: e.target.value})}/>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <input type="date" className="p-3 bg-white border rounded-xl text-xs font-bold text-center" value={form301Info.date} onChange={e=>setForm301Info({...form301Info, date: e.target.value})}/>
+                                                <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="진행 장소" value={form301Info.location} onChange={e=>setForm301Info({...form301Info, location: e.target.value})}/>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-blue-50 p-4 rounded-2xl mb-6 space-y-3">
+                                            <p className="text-xs font-bold text-blue-700 text-left">2. 담당자 정보 입력</p>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="사업부명" value={form301Info.division} onChange={e=>setForm301Info({...form301Info, division: e.target.value})}/>
                                                 <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="팀명" value={form301Info.team} onChange={e=>setForm301Info({...form301Info, team: e.target.value})}/>
@@ -897,7 +962,7 @@
                                         </div>
 
                                         <div className="bg-slate-50 p-4 rounded-2xl mb-6 space-y-3 border">
-                                            <p className="text-xs font-bold text-slate-700 text-left">2. 거래처 리스트 추가</p>
+                                            <p className="text-xs font-bold text-slate-700 text-left">3. 거래처 리스트 추가</p>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="거래처명" value={form301Account.accountName} onChange={e=>setForm301Account({...form301Account, accountName: e.target.value})}/>
                                                 <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="코드" value={form301Account.accountCode} onChange={e=>setForm301Account({...form301Account, accountCode: e.target.value})}/>
@@ -936,18 +1001,33 @@
                                                 <option value="" disabled hidden>-- 참석할 심포지엄 선택 --</option>
                                                 {symposiumList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                                             </select>
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <input className="p-3 bg-slate-50 border-2 rounded-xl text-xs font-bold text-center" placeholder="사업부명" value={sympForm.division} onChange={e=>setSympForm({...sympForm, division: e.target.value})} required/>
-                                                <input className="p-3 bg-slate-50 border-2 rounded-xl text-xs font-bold text-center" placeholder="팀명" value={sympForm.team} onChange={e=>setSympForm({...sympForm, team: e.target.value})} required/>
-                                                <input className="p-3 bg-slate-50 border-2 rounded-xl text-xs font-bold text-center" placeholder="담당자명" value={sympForm.name} onChange={e=>setSympForm({...sympForm, name: e.target.value})} required/>
-                                                <input className="p-3 bg-slate-50 border-2 rounded-xl text-xs font-bold text-center" placeholder="거래처명" value={sympForm.accountName} onChange={e=>setSympForm({...sympForm, accountName: e.target.value})} required/>
-                                                <input className="p-3 bg-slate-50 border-2 rounded-xl text-xs font-bold text-center" placeholder="거래처코드" value={sympForm.accountCode} onChange={e=>setSympForm({...sympForm, accountCode: e.target.value})} required/>
-                                                <select className="p-3 bg-slate-50 border-2 rounded-xl text-xs font-bold text-center" value={sympForm.targetProduct} onChange={e=>setSympForm({...sympForm, targetProduct: e.target.value})}>
-                                                    <option value="자누비아">자누비아</option>
-                                                    <option value="엠파맥스">엠파맥스</option>
-                                                </select>
+                                            
+                                            <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+                                                <p className="text-xs font-bold text-slate-500 text-left">담당자 정보</p>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="사업부명" value={sympForm.division} onChange={e=>setSympForm({...sympForm, division: e.target.value})} required/>
+                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="팀명" value={sympForm.team} onChange={e=>setSympForm({...sympForm, team: e.target.value})} required/>
+                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="담당자명" value={sympForm.name} onChange={e=>setSympForm({...sympForm, name: e.target.value})} required/>
+                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="담당자 연락처" value={sympForm.phone} onChange={e=>setSympForm({...sympForm, phone: e.target.value})} required/>
+                                                </div>
                                             </div>
-                                            <input type="number" className="w-full p-4 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center" placeholder="타겟품목 처방금액(원)" value={sympForm.rxAmount} onChange={e=>setSympForm({...sympForm, rxAmount: e.target.value})} required/>
+
+                                            <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+                                                <p className="text-xs font-bold text-slate-500 text-left">거래처 및 모객 닥터 정보</p>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="거래처명" value={sympForm.accountName} onChange={e=>setSympForm({...sympForm, accountName: e.target.value})} required/>
+                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="거래처코드" value={sympForm.accountCode} onChange={e=>setSympForm({...sympForm, accountCode: e.target.value})} required/>
+                                                    <select className="p-3 bg-white border rounded-xl text-xs font-bold text-center" value={sympForm.targetProduct} onChange={e=>setSympForm({...sympForm, targetProduct: e.target.value})}>
+                                                        <option value="자누비아">자누비아</option>
+                                                        <option value="엠파맥스">엠파맥스</option>
+                                                    </select>
+                                                    <input type="number" className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="타겟 처방금액(원)" value={sympForm.rxAmount} onChange={e=>setSympForm({...sympForm, rxAmount: e.target.value})} required/>
+                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="모객 닥터명" value={sympForm.doctorName} onChange={e=>setSympForm({...sympForm, doctorName: e.target.value})} required/>
+                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="닥터 연락처" value={sympForm.doctorPhone} onChange={e=>setSympForm({...sympForm, doctorPhone: e.target.value})} required/>
+                                                </div>
+                                                <textarea className="w-full p-3 bg-white border rounded-xl text-xs font-bold h-20 outline-none resize-none" placeholder="기타 요청 사항" value={sympForm.memo} onChange={e=>setSympForm({...sympForm, memo: e.target.value})} />
+                                            </div>
+
                                             <button className="w-full bg-green-600 text-white py-5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg"><Icon name="save" size={18}/> 모객 등록하기</button>
                                         </form>
                                     </div>
@@ -955,7 +1035,7 @@
 
                                 {activeTab === 'inquiries' && (
                                     <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                                        <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner"><Icon name="helpCircle" size={32}/></div>
+                                        <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner"><Icon name="messageSquare" size={32}/></div>
                                         <h2 className="text-xl font-black text-slate-800 mb-6">문의 및 건의사항</h2>
                                         <form onSubmit={submitInquiry} className="space-y-3">
                                             <div className="grid grid-cols-2 gap-3">
@@ -1013,31 +1093,6 @@
                             </div>
                         )}
                     </main>
-
-                    {/* Admin Auth Modal */}
-                    {showAdminLogin && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 text-center">
-                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-200 text-center">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-bold flex items-center gap-2"><Icon name="lock" size={24} className="text-blue-600" /> 관리자 인증</h2>
-                                    <button onClick={() => setShowAdminLogin(false)} className="text-slate-400 hover:text-slate-600"><Icon name="close" size={24} /></button>
-                                </div>
-                                <form onSubmit={(e) => {
-                                    e.preventDefault();
-                                    if (adminPasswordInput === ADMIN_PASSWORD) { 
-                                        setIsAdminMode(true); 
-                                        setShowAdminLogin(false); 
-                                        setAdminPasswordInput(""); 
-                                        setActiveTab("reqs"); 
-                                    }
-                                    else alert("비밀번호가 틀렸습니다.");
-                                }} className="space-y-4 text-center">
-                                    <input type="password" autoFocus className="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-center text-xl tracking-widest" placeholder="비밀번호 입력" value={adminPasswordInput} onChange={e => setAdminPasswordInput(e.target.value)} />
-                                    <button className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-colors text-center">로그인</button>
-                                </form>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         };
