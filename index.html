@@ -9,7 +9,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 엑셀 추출용 라이브러리 (다중 시트 지원) -->
+    <!-- 엑셀 추출용 라이브러리 -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     
     <!-- Firebase SDK (v10) -->
@@ -18,7 +18,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, doc, setDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // PM님 파이어베이스 설정값
+        // 파이어베이스 설정값
         const firebaseConfig = {
             apiKey: "AIzaSyB475AzDr96EP6I7YsyZx3OjnYDMuMaq7k",
             authDomain: "diabetes-sales.firebaseapp.com",
@@ -59,7 +59,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useCallback } = React;
 
-        // --- SVG 아이콘 컴포넌트 ---
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 search: <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>,
@@ -100,6 +99,7 @@
             );
         };
 
+        // ★ PM 관리자 접속 비밀번호 설정
         const ADMIN_PASSWORD = "1024";
 
         const App = () => {
@@ -127,6 +127,7 @@
             const [videoCategoriesList, setVideoCategoriesList] = useState([]);
             const [recentLogs, setRecentLogs] = useState([]);
             
+            // ★ MR 접속 비밀번호 초기 상태 설정 (1111)
             const [mrPassword, setMrPassword] = useState("1111");
             const [quizConfig, setQuizConfig] = useState({ question: "ㅈㄴㅂㅇ", isActive: true });
             
@@ -169,18 +170,17 @@
             useEffect(() => {
                 if (!user || !window.FB) return;
                 const { db, appId, collection, doc, setDoc, onSnapshot } = window.FB;
-                const base = `/artifacts/${appId}/public/data/`;
 
-                const unsubSettings = onSnapshot(doc(db, `${base}settings`, 'config'), (docSnap) => {
+                const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (docSnap) => {
                     if (docSnap.exists()) {
                         setMrPassword(docSnap.data().mrPassword || "1111");
                         setNewMrPassword(docSnap.data().mrPassword || "1111");
                     } else if (isAdminMode) {
-                        setDoc(doc(db, `${base}settings`, 'config'), { mrPassword: "1111" }, { merge: true });
+                        setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), { mrPassword: "1111" }, { merge: true });
                     }
                 });
 
-                const unsubQuiz = onSnapshot(doc(db, `${base}settings`, 'quiz'), (docSnap) => {
+                const unsubQuiz = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'quiz'), (docSnap) => {
                     if (docSnap.exists()) {
                         setQuizConfig(docSnap.data());
                         setQuizSettingForm(docSnap.data());
@@ -198,7 +198,7 @@
                     { col: 'categories', setter: setCategoriesList, sortField: 'order' },
                     { col: 'videoCategories', setter: setVideoCategoriesList, sortField: 'order' }
                 ].map(item => 
-                    onSnapshot(collection(db, `${base}${item.col}`), (snap) => {
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', item.col), (snap) => {
                         let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         if (item.sortField === 'order') {
                             data.sort((a,b) => (a.order || 0) - (b.order || 0));
@@ -212,11 +212,12 @@
                 return () => { unsubSettings(); unsubQuiz(); listeners.forEach(unsub => unsub()); };
             }, [user, isAdminMode]);
 
+            // 안전한 로그 데이터 가져오기
             const fetchRecentLogs = useCallback(async () => {
                 if (!user || !window.FB || !isAdminMode) return;
                 try {
                     const { db, appId, collection, getDocs } = window.FB;
-                    const logsRef = collection(db, `artifacts/${appId}/public/data/logs`);
+                    const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'logs');
                     const snap = await getDocs(logsRef);
                     let allLogs = snap.docs.map(d => ({id: d.id, ...d.data()}));
                     allLogs.sort((a,b) => b.timestamp - a.timestamp);
@@ -224,12 +225,13 @@
                 } catch(e) { console.error("로그 불러오기 오류:", e); }
             }, [user, isAdminMode]);
 
+            // MR 로그인 핸들러
             const handleUserLogin = (e) => {
                 e.preventDefault();
-                if (!/^\d{6}$/.test(loginEmpId)) return alert("사번 6자리를 숫자로 입력하세요.");
-                if (loginPassword !== mrPassword) return alert("접속 암호가 일치하지 않습니다.");
-                sessionStorage.setItem('mr_emp_id', loginEmpId);
-                setEmpId(loginEmpId);
+                if (!/^\d{6}$/.test(loginEmpId.trim())) return alert("사번 6자리를 숫자로 입력하세요.");
+                if (loginPassword.trim() !== mrPassword.trim()) return alert("접속 암호가 일치하지 않습니다. (초기 암호: 1111)");
+                sessionStorage.setItem('mr_emp_id', loginEmpId.trim());
+                setEmpId(loginEmpId.trim());
                 setIsLoggedIn(true);
                 logAction("접속", "시스템 로그인");
             };
@@ -244,7 +246,7 @@
             const logAction = async (actionType, targetTitle) => {
                 if (!user || !window.FB) return;
                 try {
-                    await window.FB.addDoc(window.FB.collection(window.FB.db, `artifacts/${window.FB.appId}/public/data/logs`), {
+                    await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'logs'), {
                         empId: sessionStorage.getItem('mr_emp_id') || empId, action: actionType, target: targetTitle, 
                         timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR')
                     });
@@ -253,12 +255,12 @@
 
             const toggleStatus = async (collectionName, itemId, currentStatus) => {
                 if (!user || !window.FB) return;
-                await window.FB.updateDoc(window.FB.doc(window.FB.db, `artifacts/${window.FB.appId}/public/data/${collectionName}`, itemId), { completed: !currentStatus });
+                await window.FB.updateDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', collectionName, itemId), { completed: !currentStatus });
             };
 
             const deleteItem = async (collectionName, itemId) => {
                 if (!user || !window.FB || !window.confirm("정말 삭제하시겠습니까?")) return;
-                await window.FB.deleteDoc(window.FB.doc(window.FB.db, `artifacts/${window.FB.appId}/public/data/${collectionName}`, itemId));
+                await window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', collectionName, itemId));
             };
 
             const moveCategory = async (list, dbPath, index, direction) => {
@@ -275,7 +277,7 @@
 
                 const { db, appId, doc, updateDoc } = window.FB;
                 try {
-                    await Promise.all(newList.map((item, i) => updateDoc(doc(db, `/artifacts/${appId}/public/data/${dbPath}`, item.id), { order: i })));
+                    await Promise.all(newList.map((item, i) => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', dbPath, item.id), { order: i })));
                 } catch(e) { console.error("순서 업데이트 실패:", e); }
             };
 
@@ -286,10 +288,10 @@
                 
                 const { db, appId, doc, updateDoc } = window.FB;
                 try {
-                    await updateDoc(doc(db, `/artifacts/${appId}/public/data/${dbPath}`, item.id), { name: finalName });
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', dbPath, item.id), { name: finalName });
                     const msgsToUpdate = messages.filter(m => m.category === item.name);
                     if (msgsToUpdate.length > 0) {
-                        const updatePromises = msgsToUpdate.map(m => updateDoc(doc(db, `/artifacts/${appId}/public/data/messages`, m.id), { category: finalName }));
+                        const updatePromises = msgsToUpdate.map(m => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'messages', m.id), { category: finalName }));
                         await Promise.all(updatePromises);
                     }
                     alert("카테고리명이 수정되었습니다.");
@@ -303,7 +305,7 @@
                     const wb = window.XLSX.utils.book_new();
                     const sortAsc = (arr) => [...arr].sort((a,b) => a.timestamp - b.timestamp);
 
-                    const logSnap = await window.FB.getDocs(window.FB.collection(window.FB.db, `artifacts/${window.FB.appId}/public/data/logs`));
+                    const logSnap = await window.FB.getDocs(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'logs'));
                     const allLogs = logSnap.docs.map(d => d.data());
 
                     const logData = sortAsc(allLogs).map(l => ({ 사번: l.empId, 활동: l.action, 대상: l.target, 일시: l.dateString }));
@@ -346,7 +348,7 @@
             const submitBrochure = async (e) => {
                 e.preventDefault();
                 if (!user || !window.FB) return;
-                await window.FB.addDoc(window.FB.collection(window.FB.db, `artifacts/${window.FB.appId}/public/data/requests`), { ...requestForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
+                await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'requests'), { ...requestForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
                 logAction("브로슈어 신청", requestForm.brochureName);
                 alert("신청이 완료되었습니다.");
                 setRequestForm({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
@@ -365,7 +367,7 @@
                 if(!form301Info.division || !form301Info.name) return alert("담당자 정보를 모두 입력하세요.");
                 try {
                     await Promise.all(local301List.map(acc => 
-                        window.FB.addDoc(window.FB.collection(window.FB.db, `artifacts/${window.FB.appId}/public/data/requests_301`), {
+                        window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'requests_301'), {
                             ...form301Info, ...acc, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR')
                         })
                     ));
@@ -379,7 +381,7 @@
             const submitSymp = async (e) => {
                 e.preventDefault();
                 if (!user || !window.FB) return;
-                await window.FB.addDoc(window.FB.collection(window.FB.db, `artifacts/${window.FB.appId}/public/data/symposium_requests`), { ...sympForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
+                await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'symposium_requests'), { ...sympForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
                 logAction("심포지엄 모객", sympForm.symposiumName);
                 alert("모객 리스트에 등록되었습니다.");
                 setSympForm({ symposiumName: "", division: "", team: "", name: "", phone: "", accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorName: "", doctorPhone: "", memo: "" });
@@ -388,7 +390,7 @@
             const submitInquiry = async (e) => {
                 e.preventDefault();
                 if (!user || !window.FB) return;
-                await window.FB.addDoc(window.FB.collection(window.FB.db, `artifacts/${window.FB.appId}/public/data/inquiries`), { ...inquiryForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
+                await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'inquiries'), { ...inquiryForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
                 logAction("문의/건의 등록", inquiryForm.division);
                 alert("성공적으로 접수되었습니다.");
                 setInquiryForm({ division: "", team: "", name: "", content: "" });
@@ -431,10 +433,10 @@
                 const data = { ...formState, category: finalCategory, isVideo: activeTab === 'videos', timestamp: Date.now() };
                 
                 if (editingId) {
-                    await updateDoc(doc(db, `/artifacts/${appId}/public/data/messages`, editingId), data);
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'messages', editingId), data);
                     alert("수정되었습니다.");
                 } else {
-                    await addDoc(collection(db, `/artifacts/${appId}/public/data/messages`), data);
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), data);
                     alert("등록되었습니다.");
                 }
                 setEditingId(null);
@@ -448,16 +450,17 @@
                 return catMatch.filter(m => m.title.toLowerCase().includes(searchQuery.toLowerCase()));
             }, [messages, activeTab, searchQuery, selectedCategory]);
 
+            // ===== 화면 렌더링 시작 =====
             if (!isLoggedIn) {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-6 text-center">
                         <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl">
                             <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner"><Icon name="user" size={40} /></div>
                             <h1 className="text-2xl font-black text-slate-800 tracking-tight">DM TEAM MR HUB</h1>
-                            <p className="text-slate-400 text-xs mt-2 mb-8 font-bold uppercase tracking-widest">보안 인증 로그인</p>
+                            <p className="text-slate-400 text-xs mt-2 mb-8 font-bold uppercase tracking-widest text-blue-500">MR 전용 보안 인증</p>
                             <form onSubmit={handleUserLogin} className="space-y-4">
                                 <input type="text" inputMode="numeric" pattern="\d*" maxLength={6} className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-center text-lg font-black tracking-widest outline-none focus:border-blue-500" placeholder="사번 (6자리)" value={loginEmpId} onChange={e => setLoginEmpId(e.target.value)} required />
-                                <input type="password" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-center text-lg font-black tracking-widest outline-none focus:border-blue-500" placeholder="접속 암호" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
+                                <input type="password" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-center text-lg font-black tracking-widest outline-none focus:border-blue-500" placeholder="접속 암호 (MR용)" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
                                 <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-100 mt-4">입장하기</button>
                             </form>
                         </div>
@@ -467,7 +470,7 @@
 
             return (
                 <div className="min-h-screen bg-slate-50 font-sans pb-24 relative">
-                    <header className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-50 px-4 py-4 flex justify-between items-center shadow-sm">
+                    <header className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-40 px-4 py-4 flex justify-between items-center shadow-sm">
                         <div className="flex items-center gap-2 text-slate-800 uppercase font-black tracking-tighter">
                             <div className="bg-blue-600 p-2 rounded-xl text-white shadow-md"><Icon name="file" size={18}/></div>
                             <span className="text-lg">DM HUB</span>
@@ -490,7 +493,7 @@
                     </header>
 
                     {!isAdminMode && (
-                        <nav className="bg-white border-b sticky top-[69px] z-40 overflow-x-auto custom-scrollbar">
+                        <nav className="bg-white border-b sticky top-[69px] z-30 overflow-x-auto custom-scrollbar">
                             <div className="flex w-max min-w-full p-1">
                                 {[
                                     { id: "home", label: "홈(퀴즈)", icon: <Icon name="home" size={16}/> },
@@ -518,7 +521,7 @@
                                         <div className="flex items-center justify-center sm:justify-start gap-2 mt-3 bg-slate-50 p-2 rounded-xl border w-full overflow-hidden">
                                             <span className="text-[10px] font-bold text-slate-500 shrink-0">MR 암호:</span>
                                             <input className="flex-1 min-w-0 p-1 bg-white border rounded text-xs font-black text-center outline-none" value={newMrPassword} onChange={e=>setNewMrPassword(e.target.value)} />
-                                            <button onClick={() => { window.FB.setDoc(window.FB.doc(window.FB.db, `artifacts/${window.FB.appId}/public/data/settings`, 'config'), { mrPassword: newMrPassword }, { merge: true }); alert("암호 변경완료"); }} className="bg-slate-800 text-white px-2 py-1.5 rounded text-[10px] font-black shrink-0">변경</button>
+                                            <button onClick={() => { window.FB.setDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'settings', 'config'), { mrPassword: newMrPassword }, { merge: true }); alert("암호 변경완료"); }} className="bg-slate-800 text-white px-2 py-1.5 rounded text-[10px] font-black shrink-0">변경</button>
                                         </div>
                                     </div>
                                     <button onClick={handleDownloadExcel} className="w-full sm:w-auto bg-green-600 text-white px-6 py-4 rounded-2xl text-xs font-black flex items-center justify-center gap-2 shadow-md hover:bg-green-700">
@@ -542,13 +545,13 @@
                                     <div className="bg-white p-6 rounded-[2rem] border shadow-sm">
                                         <h3 className="font-black text-xs mb-4 text-slate-400">초성 퀴즈 설정</h3>
                                         <div className="flex gap-2 w-full">
-                                            <input className="flex-1 min-w-0 p-3 bg-slate-50 border rounded-xl text-sm font-bold" placeholder="초성 입력 (예: ㅈㄴㅂㅇ)" value={quizSettingForm.question} onChange={e => setQuizSettingForm({...quizSettingForm, question: e.target.value})} />
-                                            <button onClick={() => { window.FB.setDoc(window.FB.doc(window.FB.db, `artifacts/${window.FB.appId}/public/data/settings`, 'quiz'), quizSettingForm); alert("저장됨"); }} className="shrink-0 bg-blue-600 text-white px-4 rounded-xl font-black text-xs">저장</button>
+                                            <input className="flex-1 min-w-0 p-3 bg-slate-50 border rounded-xl text-sm font-bold" placeholder="초성 입력 (예: ㅈㄴㅂㅇ)" value={quizSettingForm?.question || ""} onChange={e => setQuizSettingForm({...quizSettingForm, question: e.target.value})} />
+                                            <button onClick={() => { window.FB.setDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'settings', 'quiz'), quizSettingForm); alert("저장됨"); }} className="shrink-0 bg-blue-600 text-white px-4 rounded-xl font-black text-xs">저장</button>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Admin: 브로셔 관리 */}
+                                {/* Admin: 브로셔 관리 (품목 추가 + 신청 내역) */}
                                 {activeTab === 'brochures' && (
                                     <div className="space-y-4 animate-in fade-in">
                                         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden w-full">
@@ -556,7 +559,7 @@
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
                                                 if(!window.FB || !newBrochureName.trim()) return;
-                                                await window.FB.addDoc(window.FB.collection(window.FB.db, `artifacts/${window.FB.appId}/public/data/messages`), {
+                                                await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'messages'), {
                                                     title: newBrochureName.trim(), category: "제품 브로슈어", description: "브로슈어 신청 전용 품목입니다.", pdfUrl: "", pptUrl: "", youtubeUrl: "", timestamp: Date.now()
                                                 });
                                                 setNewBrochureName("");
@@ -571,7 +574,7 @@
                                                 {messages.filter(m => m.category === "제품 브로슈어").map(item => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center text-left">
                                                         <span className="font-bold text-sm text-slate-800">{item.title}</span>
-                                                        <button onClick={() => window.confirm("삭제하시겠습니까?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `artifacts/${window.FB.appId}/public/data/messages`, item.id))} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash" size={18}/></button>
+                                                        <button onClick={() => window.confirm("삭제하시겠습니까?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'messages', item.id))} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash" size={18}/></button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -615,14 +618,14 @@
                                     </div>
                                 )}
 
-                                {/* Admin: 심포지엄 관리 */}
+                                {/* Admin: 심포지엄 관리 (목록 추가 + 신청 내역) */}
                                 {activeTab === 'sympList' && (
                                     <div className="space-y-4 animate-in fade-in">
                                         <div className="bg-white p-6 rounded-[2rem] border shadow-sm w-full overflow-hidden">
                                             <h3 className="font-black text-xs mb-4 text-slate-400 text-center">모객용 심포지엄 추가</h3>
                                             <div className="flex gap-2 w-full">
                                                 <input className="flex-1 min-w-0 p-3 bg-slate-50 border rounded-xl text-sm font-bold" placeholder="심포지엄명 (예: 24년 춘계 학술대회)" value={newSymposiumName} onChange={e => setNewSymposiumName(e.target.value)} />
-                                                <button onClick={async () => { if(!newSymposiumName || !window.FB) return; await window.FB.addDoc(window.FB.collection(window.FB.db, `artifacts/${window.FB.appId}/public/data/symposium_list`), { name: newSymposiumName, timestamp: Date.now() }); setNewSymposiumName(""); }} className="shrink-0 bg-blue-600 text-white px-4 rounded-xl"><Icon name="plus" size={18}/></button>
+                                                <button onClick={async () => { if(!newSymposiumName || !window.FB) return; await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'symposium_list'), { name: newSymposiumName, timestamp: Date.now() }); setNewSymposiumName(""); }} className="shrink-0 bg-blue-600 text-white px-4 rounded-xl"><Icon name="plus" size={18}/></button>
                                             </div>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden">
@@ -684,7 +687,7 @@
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
                                                 if(!window.FB || !newCategoryName.trim()) return;
-                                                await window.FB.addDoc(window.FB.collection(window.FB.db, `artifacts/${window.FB.appId}/public/data/categories`), {
+                                                await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'categories'), {
                                                     name: newCategoryName.trim(), order: categoriesList.length, timestamp: Date.now()
                                                 });
                                                 setNewCategoryName("");
@@ -718,7 +721,7 @@
                                                                     <button onClick={() => moveCategory(categoriesList, 'categories', index, -1)} disabled={index === 0} className={`p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowUp" size={16}/></button>
                                                                     <button onClick={() => moveCategory(categoriesList, 'categories', index, 1)} disabled={index === categoriesList.length - 1} className={`p-2 rounded-lg transition-colors ${index === categoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowDown" size={16}/></button>
                                                                     <button onClick={() => { setEditingCategoryId(item.id); setEditingCategoryName(item.name); }} className="p-2 text-slate-400 hover:text-blue-600 ml-1"><Icon name="edit" size={16}/></button>
-                                                                    <button onClick={() => window.confirm("삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `artifacts/${window.FB.appId}/public/data/categories`, item.id))} className="p-2 text-slate-300 hover:text-red-500 ml-1"><Icon name="trash" size={18}/></button>
+                                                                    <button onClick={() => window.confirm("삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'categories', item.id))} className="p-2 text-slate-300 hover:text-red-500 ml-1"><Icon name="trash" size={18}/></button>
                                                                 </>
                                                             )}
                                                         </div>
@@ -737,7 +740,7 @@
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
                                                 if(!window.FB || !newVideoCategoryName.trim()) return;
-                                                await window.FB.addDoc(window.FB.collection(window.FB.db, `artifacts/${window.FB.appId}/public/data/videoCategories`), {
+                                                await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'videoCategories'), {
                                                     name: newVideoCategoryName.trim(), order: videoCategoriesList.length, timestamp: Date.now()
                                                 });
                                                 setNewVideoCategoryName("");
@@ -771,7 +774,7 @@
                                                                     <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, -1)} disabled={index === 0} className={`p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowUp" size={16}/></button>
                                                                     <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, 1)} disabled={index === videoCategoriesList.length - 1} className={`p-2 rounded-lg transition-colors ${index === videoCategoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowDown" size={16}/></button>
                                                                     <button onClick={() => { setEditingCategoryId(item.id); setEditingCategoryName(item.name); }} className="p-2 text-slate-400 hover:text-blue-600 ml-1"><Icon name="edit" size={16}/></button>
-                                                                    <button onClick={() => window.confirm("삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, `artifacts/${window.FB.appId}/public/data/videoCategories`, item.id))} className="p-2 text-slate-300 hover:text-red-500 ml-1"><Icon name="trash" size={18}/></button>
+                                                                    <button onClick={() => window.confirm("삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'videoCategories', item.id))} className="p-2 text-slate-300 hover:text-red-500 ml-1"><Icon name="trash" size={18}/></button>
                                                                 </>
                                                             )}
                                                         </div>
@@ -847,7 +850,7 @@
                                                         </div>
                                                         <div className="flex gap-1 shrink-0">
                                                             <button onClick={() => { setEditingId(item.id); setFormState({title: item.title||"", category: item.category||"", description: item.description||"", pdfUrl: item.pdfUrl||"", pptUrl: item.pptUrl||"", youtubeUrl: item.youtubeUrl||"", thumbnail: item.thumbnail||""}); window.scrollTo(0,0); }} className="p-2 text-slate-400 hover:text-blue-600"><Icon name="edit" size={16}/></button>
-                                                            <button onClick={() => { if(window.confirm("삭제하시겠습니까?")) window.FB.deleteDoc(window.FB.doc(window.FB.db, `artifacts/${window.FB.appId}/public/data/messages`, item.id)); }} className="p-2 text-slate-400 hover:text-red-500"><Icon name="trash" size={16}/></button>
+                                                            <button onClick={() => { if(window.confirm("삭제하시겠습니까?")) window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'messages', item.id)); }} className="p-2 text-slate-400 hover:text-red-500"><Icon name="trash" size={16}/></button>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -1163,6 +1166,32 @@
                             </div>
                         )}
                     </main>
+
+                    {/* Admin Auth Modal */}
+                    {showAdminLogin && (
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 text-center">
+                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-200 text-center">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-bold flex items-center gap-2"><Icon name="lock" size={24} className="text-blue-600" /> PM 관리자 인증</h2>
+                                    <button onClick={() => setShowAdminLogin(false)} className="text-slate-400 hover:text-slate-600"><Icon name="close" size={24} /></button>
+                                </div>
+                                <form onSubmit={(e) => {
+                                    e.preventDefault();
+                                    if (adminPasswordInput.trim() === ADMIN_PASSWORD) { 
+                                        setIsAdminMode(true); 
+                                        setShowAdminLogin(false); 
+                                        setAdminPasswordInput(""); 
+                                        setActiveTab("home"); 
+                                    }
+                                    else alert("관리자 비밀번호가 틀렸습니다. (1024를 입력해주세요)");
+                                }} className="space-y-4 text-center">
+                                    <p className="text-xs text-slate-500 font-bold mb-4">관리자 전용 비밀번호(1024)를 입력하세요.</p>
+                                    <input type="password" autoFocus className="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-center text-xl tracking-widest" placeholder="비밀번호 입력" value={adminPasswordInput} onChange={e => setAdminPasswordInput(e.target.value)} />
+                                    <button className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-colors text-center">로그인</button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
