@@ -229,7 +229,7 @@
             const handleUserLogin = (e) => {
                 e.preventDefault();
                 if (!/^\d{6}$/.test(loginEmpId.trim())) return alert("사번 6자리를 숫자로 입력하세요.");
-                if (loginPassword.trim() !== mrPassword.trim()) return alert("접속 암호가 일치하지 않습니다. (초기 암호: 1111)");
+                if (loginPassword.trim() !== mrPassword.trim()) return alert("접속 암호가 일치하지 않습니다.");
                 sessionStorage.setItem('mr_emp_id', loginEmpId.trim());
                 setEmpId(loginEmpId.trim());
                 setIsLoggedIn(true);
@@ -1183,9 +1183,9 @@
                                         setAdminPasswordInput(""); 
                                         setActiveTab("home"); 
                                     }
-                                    else alert("관리자 비밀번호가 틀렸습니다. (1024를 입력해주세요)");
+                                    else alert("관리자 비밀번호가 일치하지 않습니다.");
                                 }} className="space-y-4 text-center">
-                                    <p className="text-xs text-slate-500 font-bold mb-4">관리자 전용 비밀번호(1024)를 입력하세요.</p>
+                                    <p className="text-xs text-slate-500 font-bold mb-4">관리자 전용 비밀번호를 입력하세요.</p>
                                     <input type="password" autoFocus className="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-center text-xl tracking-widest" placeholder="비밀번호 입력" value={adminPasswordInput} onChange={e => setAdminPasswordInput(e.target.value)} />
                                     <button className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-colors text-center">로그인</button>
                                 </form>
