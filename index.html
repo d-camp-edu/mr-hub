@@ -59,7 +59,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useCallback } = React;
 
-        // --- SVG 아이콘 컴포넌트 직접 정의 ---
+        // --- SVG 아이콘 컴포넌트 ---
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 search: <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>,
@@ -212,7 +212,6 @@
                 return () => { unsubSettings(); unsubQuiz(); listeners.forEach(unsub => unsub()); };
             }, [user, isAdminMode]);
 
-            // ★ 로그 에러 방지용으로 완벽하게 수정된 데이터 패칭 함수 (인덱싱 문제 해결)
             const fetchRecentLogs = useCallback(async () => {
                 if (!user || !window.FB || !isAdminMode) return;
                 try {
@@ -220,13 +219,9 @@
                     const logsRef = collection(db, `artifacts/${appId}/public/data/logs`);
                     const snap = await getDocs(logsRef);
                     let allLogs = snap.docs.map(d => ({id: d.id, ...d.data()}));
-                    
-                    // 에러가 나지 않도록 메모리 상에서 정렬하고 50개만 표시
                     allLogs.sort((a,b) => b.timestamp - a.timestamp);
                     setRecentLogs(allLogs.slice(0, 50));
-                } catch(e) {
-                    console.error("로그 불러오기 오류:", e);
-                }
+                } catch(e) { console.error("로그 불러오기 오류:", e); }
             }, [user, isAdminMode]);
 
             const handleUserLogin = (e) => {
@@ -270,7 +265,6 @@
                 if (!window.FB) return;
                 const newIndex = index + direction;
                 if (newIndex < 0 || newIndex >= list.length) return;
-
                 const newList = [...list];
                 const temp = newList[index];
                 newList[index] = newList[newIndex];
@@ -454,7 +448,6 @@
                 return catMatch.filter(m => m.title.toLowerCase().includes(searchQuery.toLowerCase()));
             }, [messages, activeTab, searchQuery, selectedCategory]);
 
-            // ===== 렌더링 =====
             if (!isLoggedIn) {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-6 text-center">
@@ -533,7 +526,6 @@
                                     </button>
                                 </div>
 
-                                {/* 분리된 내역 관리 탭들 */}
                                 <div className="flex flex-wrap bg-slate-200 p-1 rounded-2xl gap-1">
                                     {[
                                         {id:'home', lbl:'홈(퀴즈)'}, {id:'brochures', lbl:'브로셔관리'}, {id:'reqs301', lbl:'301관리'}, {id:'sympList', lbl:'심포지엄관리'}, {id:'inquiries', lbl:'문의관리'},
@@ -556,7 +548,7 @@
                                     </div>
                                 )}
 
-                                {/* Admin: 브로셔 관리 (품목 추가 + 신청 내역) */}
+                                {/* Admin: 브로셔 관리 */}
                                 {activeTab === 'brochures' && (
                                     <div className="space-y-4 animate-in fade-in">
                                         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden w-full">
@@ -623,7 +615,7 @@
                                     </div>
                                 )}
 
-                                {/* Admin: 심포지엄 관리 (목록 추가 + 신청 내역) */}
+                                {/* Admin: 심포지엄 관리 */}
                                 {activeTab === 'sympList' && (
                                     <div className="space-y-4 animate-in fade-in">
                                         <div className="bg-white p-6 rounded-[2rem] border shadow-sm w-full overflow-hidden">
@@ -953,113 +945,177 @@
                                 )}
 
                                 {activeTab === '301' && (
-                                    <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                                        <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center justify-center gap-2"><Icon name="users" size={24} className="text-orange-500"/> 301 다기관 설명회 신청</h2>
-                                        
-                                        <div className="bg-orange-50 p-4 rounded-2xl mb-6 space-y-3">
-                                            <p className="text-xs font-bold text-orange-700 text-left">1. 기본 정보 입력</p>
-                                            <input className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="설명회 제목 (예: 서울 강남권 301 설명회)" value={form301Info.title} onChange={e=>setForm301Info({...form301Info, title: e.target.value})}/>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <input type="date" className="p-3 bg-white border rounded-xl text-xs font-bold text-center" value={form301Info.date} onChange={e=>setForm301Info({...form301Info, date: e.target.value})}/>
-                                                <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="진행 장소" value={form301Info.location} onChange={e=>setForm301Info({...form301Info, location: e.target.value})}/>
+                                    <div className="space-y-6">
+                                        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
+                                            <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center justify-center gap-2"><Icon name="users" size={24} className="text-orange-500"/> 301 다기관 설명회 신청</h2>
+                                            
+                                            <div className="bg-orange-50 p-4 rounded-2xl mb-6 space-y-3">
+                                                <p className="text-xs font-bold text-orange-700 text-left">1. 기본 정보 입력</p>
+                                                <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="설명회 제목 (예: 서울 강남권 301 설명회)" value={form301Info.title} onChange={e=>setForm301Info({...form301Info, title: e.target.value})}/>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    <input type="date" className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" value={form301Info.date} onChange={e=>setForm301Info({...form301Info, date: e.target.value})}/>
+                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="진행 장소" value={form301Info.location} onChange={e=>setForm301Info({...form301Info, location: e.target.value})}/>
+                                                </div>
                                             </div>
+                                            
+                                            <div className="bg-blue-50 p-4 rounded-2xl mb-6 space-y-3">
+                                                <p className="text-xs font-bold text-blue-700 text-left">2. 담당자 정보 입력</p>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="사업부명" value={form301Info.division} onChange={e=>setForm301Info({...form301Info, division: e.target.value})}/>
+                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="팀명" value={form301Info.team} onChange={e=>setForm301Info({...form301Info, team: e.target.value})}/>
+                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="담당자명" value={form301Info.name} onChange={e=>setForm301Info({...form301Info, name: e.target.value})}/>
+                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="연락처" value={form301Info.phone} onChange={e=>setForm301Info({...form301Info, phone: e.target.value})}/>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-slate-50 p-4 rounded-2xl mb-6 space-y-3 border">
+                                                <p className="text-xs font-bold text-slate-700 text-left">3. 거래처 리스트 추가</p>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="거래처명" value={form301Account.accountName} onChange={e=>setForm301Account({...form301Account, accountName: e.target.value})}/>
+                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="코드" value={form301Account.accountCode} onChange={e=>setForm301Account({...form301Account, accountCode: e.target.value})}/>
+                                                    <select className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" value={form301Account.targetProduct} onChange={e=>setForm301Account({...form301Account, targetProduct: e.target.value})}>
+                                                        <option value="자누비아">자누비아</option>
+                                                        <option value="엠파맥스">엠파맥스</option>
+                                                        <option value="엑시글루">엑시글루</option>
+                                                        <option value="듀비에">듀비에</option>
+                                                    </select>
+                                                    <input type="number" className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="처방금액(원)" value={form301Account.rxAmount} onChange={e=>setForm301Account({...form301Account, rxAmount: e.target.value})}/>
+                                                </div>
+                                                <button type="button" onClick={add301Account} className="w-full bg-slate-800 text-white py-3 mt-2 rounded-xl text-sm font-black flex items-center justify-center gap-1"><Icon name="plus" size={16}/> 목록에 추가</button>
+                                            </div>
+
+                                            {local301List.length > 0 && (
+                                                <div className="mb-6 border rounded-xl overflow-hidden">
+                                                    <div className="bg-slate-100 p-2 text-xs font-bold text-slate-500">추가된 거래처 ({local301List.length}건)</div>
+                                                    <ul className="divide-y max-h-40 overflow-y-auto custom-scrollbar">
+                                                        {local301List.map((acc, idx) => (
+                                                            <li key={idx} className="p-3 text-left text-xs flex justify-between bg-white items-center">
+                                                                <span><b>{acc.accountName}</b> ({acc.targetProduct}) - {acc.rxAmount}원</span>
+                                                                <button onClick={()=>setLocal301List(local301List.filter((_,i)=>i!==idx))} className="text-red-500 p-1"><Icon name="trash" size={14}/></button>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+
+                                            <button onClick={submit301All} className="w-full bg-orange-500 text-white py-5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg"><Icon name="save" size={18}/> 최종 제출하기</button>
                                         </div>
                                         
-                                        <div className="bg-blue-50 p-4 rounded-2xl mb-6 space-y-3">
-                                            <p className="text-xs font-bold text-blue-700 text-left">2. 담당자 정보 입력</p>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="사업부명" value={form301Info.division} onChange={e=>setForm301Info({...form301Info, division: e.target.value})}/>
-                                                <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="팀명" value={form301Info.team} onChange={e=>setForm301Info({...form301Info, team: e.target.value})}/>
-                                                <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="담당자명" value={form301Info.name} onChange={e=>setForm301Info({...form301Info, name: e.target.value})}/>
-                                                <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="연락처" value={form301Info.phone} onChange={e=>setForm301Info({...form301Info, phone: e.target.value})}/>
+                                        <div className="bg-white rounded-[2rem] border p-4 shadow-sm mt-6">
+                                            <h3 className="font-black text-sm text-slate-600 mb-3 text-center">나의 301 설명회 신청 현황</h3>
+                                            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                                {requests301.filter(r => r.empId === empId).map(req => (
+                                                    <div key={req.id} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center border">
+                                                        <div className="text-left">
+                                                            <p className="text-xs font-bold text-slate-800 line-clamp-1">[{req.title}] {req.accountName}</p>
+                                                            <p className="text-[10px] text-slate-500">{req.dateString.slice(0, 11)} 신청</p>
+                                                        </div>
+                                                        <span className={`text-[10px] font-black px-2 py-1 rounded-full whitespace-nowrap ${req.completed ? 'bg-orange-100 text-orange-700' : 'bg-slate-200 text-slate-600'}`}>
+                                                            {req.completed ? '처리 완료' : '대기 중'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                                {requests301.filter(r => r.empId === empId).length === 0 && <p className="text-xs text-slate-400 text-center py-4">신청 내역이 없습니다.</p>}
                                             </div>
                                         </div>
-
-                                        <div className="bg-slate-50 p-4 rounded-2xl mb-6 space-y-3 border">
-                                            <p className="text-xs font-bold text-slate-700 text-left">3. 거래처 리스트 추가</p>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="거래처명" value={form301Account.accountName} onChange={e=>setForm301Account({...form301Account, accountName: e.target.value})}/>
-                                                <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="코드" value={form301Account.accountCode} onChange={e=>setForm301Account({...form301Account, accountCode: e.target.value})}/>
-                                                <select className="p-3 bg-white border rounded-xl text-xs font-bold text-center" value={form301Account.targetProduct} onChange={e=>setForm301Account({...form301Account, targetProduct: e.target.value})}>
-                                                    <option value="자누비아">자누비아</option>
-                                                    <option value="엠파맥스">엠파맥스</option>
-                                                </select>
-                                                <input type="number" className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="처방금액(원)" value={form301Account.rxAmount} onChange={e=>setForm301Account({...form301Account, rxAmount: e.target.value})}/>
-                                            </div>
-                                            <button type="button" onClick={add301Account} className="w-full bg-slate-800 text-white py-3 rounded-xl text-xs font-black flex items-center justify-center gap-1"><Icon name="plus" size={16}/> 목록에 추가</button>
-                                        </div>
-
-                                        {local301List.length > 0 && (
-                                            <div className="mb-6 border rounded-xl overflow-hidden">
-                                                <div className="bg-slate-100 p-2 text-[10px] font-bold text-slate-500">추가된 거래처 ({local301List.length}건)</div>
-                                                <ul className="divide-y max-h-40 overflow-y-auto custom-scrollbar">
-                                                    {local301List.map((acc, idx) => (
-                                                        <li key={idx} className="p-2 text-left text-[10px] flex justify-between bg-white">
-                                                            <span><b>{acc.accountName}</b> ({acc.targetProduct}) - {acc.rxAmount}원</span>
-                                                            <button onClick={()=>setLocal301List(local301List.filter((_,i)=>i!==idx))} className="text-red-500"><Icon name="trash" size={12}/></button>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
-
-                                        <button onClick={submit301All} className="w-full bg-orange-500 text-white py-5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg"><Icon name="save" size={18}/> 최종 제출하기</button>
                                     </div>
                                 )}
 
                                 {activeTab === 'symp' && (
-                                    <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                                        <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center justify-center gap-2"><Icon name="presentation" size={24} className="text-green-600"/> 심포지엄 모객 신청</h2>
-                                        <form onSubmit={submitSymp} className="space-y-4">
-                                            <select className="w-full p-4 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center appearance-none outline-none focus:border-green-500" value={sympForm.symposiumName} onChange={e=>setSympForm({...sympForm, symposiumName: e.target.value})} required>
-                                                <option value="" disabled hidden>-- 참석할 심포지엄 선택 --</option>
-                                                {symposiumList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                                            </select>
-                                            
-                                            <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-                                                <p className="text-xs font-bold text-slate-500 text-left">담당자 정보</p>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="사업부명" value={sympForm.division} onChange={e=>setSympForm({...sympForm, division: e.target.value})} required/>
-                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="팀명" value={sympForm.team} onChange={e=>setSympForm({...sympForm, team: e.target.value})} required/>
-                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="담당자명" value={sympForm.name} onChange={e=>setSympForm({...sympForm, name: e.target.value})} required/>
-                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="담당자 연락처" value={sympForm.phone} onChange={e=>setSympForm({...sympForm, phone: e.target.value})} required/>
+                                    <div className="space-y-6">
+                                        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
+                                            <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center justify-center gap-2"><Icon name="presentation" size={24} className="text-green-600"/> 심포지엄 모객 신청</h2>
+                                            <form onSubmit={submitSymp} className="space-y-4">
+                                                <select className="w-full p-4 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center appearance-none outline-none focus:border-green-500" value={sympForm.symposiumName} onChange={e=>setSympForm({...sympForm, symposiumName: e.target.value})} required>
+                                                    <option value="" disabled hidden>-- 참석할 심포지엄 선택 --</option>
+                                                    {symposiumList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                                </select>
+                                                
+                                                <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+                                                    <p className="text-xs font-bold text-slate-500 text-left">담당자 정보</p>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="사업부명" value={sympForm.division} onChange={e=>setSympForm({...sympForm, division: e.target.value})} required/>
+                                                        <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="팀명" value={sympForm.team} onChange={e=>setSympForm({...sympForm, team: e.target.value})} required/>
+                                                        <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="담당자명" value={sympForm.name} onChange={e=>setSympForm({...sympForm, name: e.target.value})} required/>
+                                                        <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="담당자 연락처" value={sympForm.phone} onChange={e=>setSympForm({...sympForm, phone: e.target.value})} required/>
+                                                    </div>
                                                 </div>
-                                            </div>
 
-                                            <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-                                                <p className="text-xs font-bold text-slate-500 text-left">거래처 및 모객 닥터 정보</p>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="거래처명" value={sympForm.accountName} onChange={e=>setSympForm({...sympForm, accountName: e.target.value})} required/>
-                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="거래처코드" value={sympForm.accountCode} onChange={e=>setSympForm({...sympForm, accountCode: e.target.value})} required/>
-                                                    <select className="p-3 bg-white border rounded-xl text-xs font-bold text-center" value={sympForm.targetProduct} onChange={e=>setSympForm({...sympForm, targetProduct: e.target.value})}>
-                                                        <option value="자누비아">자누비아</option>
-                                                        <option value="엠파맥스">엠파맥스</option>
-                                                    </select>
-                                                    <input type="number" className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="타겟 처방금액(원)" value={sympForm.rxAmount} onChange={e=>setSympForm({...sympForm, rxAmount: e.target.value})} required/>
-                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="모객 닥터명" value={sympForm.doctorName} onChange={e=>setSympForm({...sympForm, doctorName: e.target.value})} required/>
-                                                    <input className="p-3 bg-white border rounded-xl text-xs font-bold text-center" placeholder="닥터 연락처" value={sympForm.doctorPhone} onChange={e=>setSympForm({...sympForm, doctorPhone: e.target.value})} required/>
+                                                <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
+                                                    <p className="text-xs font-bold text-slate-500 text-left">거래처 및 모객 닥터 정보</p>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="거래처명" value={sympForm.accountName} onChange={e=>setSympForm({...sympForm, accountName: e.target.value})} required/>
+                                                        <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="거래처코드" value={sympForm.accountCode} onChange={e=>setSympForm({...sympForm, accountCode: e.target.value})} required/>
+                                                        <select className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" value={sympForm.targetProduct} onChange={e=>setSympForm({...sympForm, targetProduct: e.target.value})}>
+                                                            <option value="자누비아">자누비아</option>
+                                                            <option value="엠파맥스">엠파맥스</option>
+                                                            <option value="엑시글루">엑시글루</option>
+                                                            <option value="듀비에">듀비에</option>
+                                                        </select>
+                                                        <input type="number" className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="타겟 처방금액(원)" value={sympForm.rxAmount} onChange={e=>setSympForm({...sympForm, rxAmount: e.target.value})} required/>
+                                                        <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="모객 닥터명" value={sympForm.doctorName} onChange={e=>setSympForm({...sympForm, doctorName: e.target.value})} required/>
+                                                        <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="닥터 연락처" value={sympForm.doctorPhone} onChange={e=>setSympForm({...sympForm, doctorPhone: e.target.value})} required/>
+                                                    </div>
+                                                    <textarea className="w-full p-4 bg-white border rounded-xl text-sm font-bold h-24 outline-none resize-none mt-2" placeholder="기타 요청 사항" value={sympForm.memo} onChange={e=>setSympForm({...sympForm, memo: e.target.value})} />
                                                 </div>
-                                                <textarea className="w-full p-3 bg-white border rounded-xl text-xs font-bold h-20 outline-none resize-none" placeholder="기타 요청 사항" value={sympForm.memo} onChange={e=>setSympForm({...sympForm, memo: e.target.value})} />
-                                            </div>
 
-                                            <button className="w-full bg-green-600 text-white py-5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg"><Icon name="save" size={18}/> 모객 등록하기</button>
-                                        </form>
+                                                <button className="w-full bg-green-600 text-white py-5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg"><Icon name="save" size={18}/> 모객 등록하기</button>
+                                            </form>
+                                        </div>
+                                        
+                                        <div className="bg-white rounded-[2rem] border p-4 shadow-sm mt-6">
+                                            <h3 className="font-black text-sm text-slate-600 mb-3 text-center">나의 심포지엄 모객 현황</h3>
+                                            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                                {sympRequests.filter(r => r.empId === empId).map(req => (
+                                                    <div key={req.id} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center border">
+                                                        <div className="text-left">
+                                                            <p className="text-xs font-bold text-slate-800 line-clamp-1">[{req.symposiumName}] {req.accountName}</p>
+                                                            <p className="text-[10px] text-slate-500">{req.dateString.slice(0, 11)} 신청</p>
+                                                        </div>
+                                                        <span className={`text-[10px] font-black px-2 py-1 rounded-full whitespace-nowrap ${req.completed ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>
+                                                            {req.completed ? '처리 완료' : '대기 중'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                                {sympRequests.filter(r => r.empId === empId).length === 0 && <p className="text-xs text-slate-400 text-center py-4">모객 내역이 없습니다.</p>}
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
 
                                 {activeTab === 'inquiries' && (
-                                    <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                                        <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner"><Icon name="messageSquare" size={32}/></div>
-                                        <h2 className="text-xl font-black text-slate-800 mb-6">문의 및 건의사항</h2>
-                                        <form onSubmit={submitInquiry} className="space-y-3">
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-purple-500" placeholder="사업부명" value={inquiryForm.division} onChange={e=>setInquiryForm({...inquiryForm, division: e.target.value})} required/>
-                                                <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-purple-500" placeholder="팀명" value={inquiryForm.team} onChange={e=>setInquiryForm({...inquiryForm, team: e.target.value})} required/>
+                                    <div className="space-y-6">
+                                        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
+                                            <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner"><Icon name="messageSquare" size={32}/></div>
+                                            <h2 className="text-xl font-black text-slate-800 mb-6">문의 및 건의사항</h2>
+                                            <form onSubmit={submitInquiry} className="space-y-3">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-purple-500" placeholder="사업부명" value={inquiryForm.division} onChange={e=>setInquiryForm({...inquiryForm, division: e.target.value})} required/>
+                                                    <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-purple-500" placeholder="팀명" value={inquiryForm.team} onChange={e=>setInquiryForm({...inquiryForm, team: e.target.value})} required/>
+                                                </div>
+                                                <input className="w-full p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-purple-500" placeholder="담당자명" value={inquiryForm.name} onChange={e=>setInquiryForm({...inquiryForm, name: e.target.value})} required/>
+                                                <textarea className="w-full p-4 bg-slate-50 border-2 rounded-xl text-sm font-bold h-32 text-left resize-none outline-none focus:border-purple-500" placeholder="자유롭게 의견을 남겨주세요." value={inquiryForm.content} onChange={e=>setInquiryForm({...inquiryForm, content: e.target.value})} required/>
+                                                <button className="w-full bg-purple-600 text-white py-4 rounded-xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">의견 접수하기</button>
+                                            </form>
+                                        </div>
+                                        
+                                        <div className="bg-white rounded-[2rem] border p-4 shadow-sm mt-6">
+                                            <h3 className="font-black text-sm text-slate-600 mb-3 text-center">나의 건의/문의 접수 현황</h3>
+                                            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                                {inquiries.filter(i => i.empId === empId).map(inq => (
+                                                    <div key={inq.id} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center border">
+                                                        <div className="text-left flex-1 min-w-0 pr-2">
+                                                            <p className="text-xs font-bold text-slate-800 line-clamp-1">{inq.content}</p>
+                                                            <p className="text-[10px] text-slate-500">{inq.dateString.slice(0, 11)} 접수</p>
+                                                        </div>
+                                                        <span className={`text-[10px] font-black px-2 py-1 rounded-full whitespace-nowrap shrink-0 ${inq.completed ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-600'}`}>
+                                                            {inq.completed ? '답변 완료' : '대기 중'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                                {inquiries.filter(i => i.empId === empId).length === 0 && <p className="text-xs text-slate-400 text-center py-4">문의 내역이 없습니다.</p>}
                                             </div>
-                                            <input className="w-full p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-purple-500" placeholder="담당자명" value={inquiryForm.name} onChange={e=>setInquiryForm({...inquiryForm, name: e.target.value})} required/>
-                                            <textarea className="w-full p-4 bg-slate-50 border-2 rounded-xl text-sm font-bold h-32 text-left resize-none outline-none focus:border-purple-500" placeholder="자유롭게 의견을 남겨주세요." value={inquiryForm.content} onChange={e=>setInquiryForm({...inquiryForm, content: e.target.value})} required/>
-                                            <button className="w-full bg-purple-600 text-white py-4 rounded-xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">의견 접수하기</button>
-                                        </form>
+                                        </div>
                                     </div>
                                 )}
 
@@ -1107,31 +1163,6 @@
                             </div>
                         )}
                     </main>
-
-                    {/* Admin Auth Modal */}
-                    {showAdminLogin && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 text-center">
-                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-200 text-center">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-bold flex items-center gap-2"><Icon name="lock" size={24} className="text-blue-600" /> 관리자 인증</h2>
-                                    <button onClick={() => setShowAdminLogin(false)} className="text-slate-400 hover:text-slate-600"><Icon name="close" size={24} /></button>
-                                </div>
-                                <form onSubmit={(e) => {
-                                    e.preventDefault();
-                                    if (adminPasswordInput === ADMIN_PASSWORD) { 
-                                        setIsAdminMode(true); 
-                                        setShowAdminLogin(false); 
-                                        setAdminPasswordInput(""); 
-                                        setActiveTab("home"); 
-                                    }
-                                    else alert("비밀번호가 틀렸습니다.");
-                                }} className="space-y-4 text-center">
-                                    <input type="password" autoFocus className="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-center text-xl tracking-widest" placeholder="비밀번호 입력" value={adminPasswordInput} onChange={e => setAdminPasswordInput(e.target.value)} />
-                                    <button className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-colors text-center">로그인</button>
-                                </form>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         };
