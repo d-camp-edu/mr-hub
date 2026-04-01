@@ -160,6 +160,7 @@
             
             const [editingCategoryId, setEditingCategoryId] = useState(null);
             const [editingCategoryName, setEditingCategoryName] = useState("");
+            const [editingSympId, setEditingSympId] = useState(null);
 
             const [formState, setFormState] = useState({ title: "", category: "", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "", thumbnail: "" });
             const [requestForm, setRequestForm] = useState({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
@@ -260,6 +261,7 @@
                 setEmpId(""); setLoginEmpId(""); setLoginPassword("");
                 setIsLoggedIn(false); setIsAdminMode(false);
                 setActiveTab("home");
+                setEditingSympId(null);
             };
 
             const logAction = async (actionType, targetTitle) => {
@@ -564,7 +566,7 @@
                                         {id:'home', lbl:'사진인증'}, {id:'brochures', lbl:'브로셔관리'}, {id:'reqs301', lbl:'301관리'}, {id:'sympList', lbl:'심포지엄관리'}, {id:'inquiries', lbl:'문의관리'},
                                         {id:'categories', lbl:'자료분류'}, {id:'vidCats', lbl:'영상분류'}, {id:'materials', lbl:'자료등록'}, {id:'videos', lbl:'영상등록'}, {id:'logs', lbl:'로그'}
                                     ].map(t => (
-                                        <button key={t.id} onClick={() => { setActiveTab(t.id); setEditingId(null); if(t.id==='logs') fetchRecentLogs(); }} className={`flex-1 min-w-[65px] py-2 px-1 text-[10px] sm:text-[11px] font-black rounded-xl transition-all ${activeTab === t.id ? 'bg-white shadow-md text-blue-600' : 'text-slate-500 hover:bg-slate-300'}`}>
+                                        <button key={t.id} onClick={() => { setActiveTab(t.id); setEditingId(null); setEditingSympId(null); if(t.id==='logs') fetchRecentLogs(); }} className={`flex-1 min-w-[65px] py-2 px-1 text-[10px] sm:text-[11px] font-black rounded-xl transition-all ${activeTab === t.id ? 'bg-white shadow-md text-blue-600' : 'text-slate-500 hover:bg-slate-300'}`}>
                                             {t.lbl}
                                         </button>
                                     ))}
@@ -661,7 +663,7 @@
                                 {activeTab === 'sympList' && (
                                     <div className="space-y-4 animate-in fade-in">
                                         <div className="bg-white p-6 rounded-[2rem] border shadow-sm w-full overflow-hidden">
-                                            <h3 className="font-black text-xs mb-4 text-slate-400 text-center">모객용 심포지엄 추가</h3>
+                                            <h3 className="font-black text-xs mb-4 text-slate-400 text-center">{editingSympId ? "모객용 심포지엄 수정" : "모객용 심포지엄 추가"}</h3>
                                             <div className="flex flex-col gap-3">
                                                 <input className="w-full p-3 bg-slate-50 border rounded-xl text-sm font-bold min-w-0" placeholder="심포지엄명 (예: 24년 춘계 학술대회)" value={newSymposiumName} onChange={e => setNewSymposiumName(e.target.value)} />
                                                 <div className="flex items-center gap-3">
@@ -670,13 +672,27 @@
                                                         <span className="truncate">아젠다 사진 첨부(선택)</span>
                                                         <input type="file" accept="image/*" onChange={handleAgendaUpload} className="hidden" />
                                                     </label>
-                                                    {newSympAgendaBase64 && <img src={newSympAgendaBase64} className="h-10 w-10 object-cover rounded shadow shrink-0" alt="agenda" />}
+                                                    {newSympAgendaBase64 && (
+                                                        <div className="relative shrink-0">
+                                                            <img src={newSympAgendaBase64} className="h-10 w-10 object-cover rounded shadow" alt="agenda" />
+                                                            <button type="button" onClick={() => setNewSympAgendaBase64("")} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm"><Icon name="trash" size={12}/></button>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <button onClick={async () => { 
-                                                    if(!newSymposiumName || !window.FB) return; 
-                                                    await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'symposium_list'), { name: newSymposiumName, agendaImage: newSympAgendaBase64, timestamp: Date.now() }); 
-                                                    setNewSymposiumName(""); setNewSympAgendaBase64(""); 
-                                                }} className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold flex justify-center items-center gap-2"><Icon name="plus" size={18}/> 심포지엄 추가</button>
+                                                <div className="flex gap-2">
+                                                    <button onClick={async () => { 
+                                                        if(!newSymposiumName || !window.FB) return; 
+                                                        if (editingSympId) {
+                                                            await window.FB.updateDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'symposium_list', editingSympId), { name: newSymposiumName, agendaImage: newSympAgendaBase64 }); 
+                                                            alert("수정되었습니다.");
+                                                        } else {
+                                                            await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'symposium_list'), { name: newSymposiumName, agendaImage: newSympAgendaBase64, timestamp: Date.now() }); 
+                                                            alert("추가되었습니다.");
+                                                        }
+                                                        setNewSymposiumName(""); setNewSympAgendaBase64(""); setEditingSympId(null);
+                                                    }} className="flex-1 bg-blue-600 text-white p-3 rounded-xl font-bold flex justify-center items-center gap-2"><Icon name={editingSympId ? "save" : "plus"} size={18}/> {editingSympId ? "저장" : "심포지엄 추가"}</button>
+                                                    {editingSympId && <button onClick={() => { setEditingSympId(null); setNewSymposiumName(""); setNewSympAgendaBase64(""); }} className="px-6 bg-slate-100 text-slate-500 font-bold rounded-xl text-sm hover:bg-slate-200 transition-all">취소</button>}
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden">
@@ -688,7 +704,10 @@
                                                             {item.agendaImage && <img src={item.agendaImage} className="w-8 h-8 object-cover rounded shrink-0" alt="agenda"/>}
                                                             <span className="font-bold text-sm truncate">{item.name}</span>
                                                         </div>
-                                                        <button onClick={() => deleteItem('symposium_list', item.id)} className="text-red-400 shrink-0"><Icon name="trash" size={16}/></button>
+                                                        <div className="flex gap-1 shrink-0">
+                                                            <button onClick={() => { setEditingSympId(item.id); setNewSymposiumName(item.name); setNewSympAgendaBase64(item.agendaImage || ""); window.scrollTo(0,0); }} className="p-2 text-slate-400 hover:text-blue-600"><Icon name="edit" size={16}/></button>
+                                                            <button onClick={() => deleteItem('symposium_list', item.id)} className="p-2 text-slate-400 hover:text-red-500"><Icon name="trash" size={16}/></button>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
