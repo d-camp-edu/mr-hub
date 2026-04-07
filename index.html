@@ -171,15 +171,16 @@
             const [newSympAgendaBase64, setNewSympAgendaBase64] = useState("");
             const [newBrochureName, setNewBrochureName] = useState("");
             
+            const [quizSettingForm, setQuizSettingForm] = useState({ question: "", isActive: true });
+            
             const [form301Info, setForm301Info] = useState({ title: "", date: "", location: "", division: "", team: "", name: "", phone: "" });
-            const [form301Account, setForm301Account] = useState({ accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "" });
+            const [form301Account, setForm301Account] = useState({ accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorCount: "" });
             const [local301List, setLocal301List] = useState([]);
             
             const [sympForm, setSympForm] = useState({ symposiumName: "", division: "", team: "", name: "", phone: "", accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorName: "", doctorPhone: "", memo: "" });
 
             const [photoForm, setPhotoForm] = useState({ division: "", team: "", name: "", photoBase64: "" });
 
-            // 1. Firebase 접속 및 익명 로그인
             useEffect(() => {
                 const init = setInterval(() => {
                     if (window.FB) {
@@ -201,8 +202,9 @@
                     if (docSnap.exists()) {
                         setMrPassword(docSnap.data().mrPassword || "1111");
                         setNewMrPassword(docSnap.data().mrPassword || "1111");
-                    } else if (isAdminMode) {
-                        setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), { mrPassword: "1111" }, { merge: true });
+                    } else {
+                        setMrPassword("1111");
+                        setNewMrPassword("1111");
                     }
                 });
 
@@ -337,7 +339,7 @@
                     const reqData = sortDesc(requests).map(r => ({ 사번: r.empId, 성함: r.requesterName, 연락처: r.phone, 사무소: r.office, 거래처명: r.accountName, 거래처코드: r.accountCode, 품목: r.brochureName, 수량: r.quantity, 상태: r.completed ? "배송완료" : "준비중", 일시: r.dateString }));
                     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(reqData), "브로슈어신청");
 
-                    const r301Data = sortDesc(requests301).map(r => ({ 신청제목: r.title, 진행날짜: r.date, 진행장소: r.location, 사번: r.empId, 사업부: r.division, 팀: r.team, 담당자: r.name, 연락처: r.phone, 거래처명: r.accountName, 거래처코드: r.accountCode, 타겟품목: r.targetProduct, 처방금액: r.rxAmount, 상태: r.completed ? "처리완료" : "대기", 일시: r.dateString }));
+                    const r301Data = sortDesc(requests301).map(r => ({ 신청제목: r.title, 진행날짜: r.date, 진행장소: r.location, 사번: r.empId, 사업부: r.division, 팀: r.team, 담당자: r.name, 연락처: r.phone, 거래처명: r.accountName, 거래처코드: r.accountCode, 타겟품목: r.targetProduct, 처방금액: r.rxAmount, 참석Dr수: r.doctorCount, 상태: r.completed ? "처리완료" : "대기", 일시: r.dateString }));
                     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(r301Data), "301설명회");
 
                     const sympData = sortDesc(sympRequests).map(r => ({ 심포지엄명: r.symposiumName, 사번: r.empId, 사업부: r.division, 팀: r.team, 담당자: r.name, 연락처: r.phone, 거래처명: r.accountName, 거래처코드: r.accountCode, 타겟품목: r.targetProduct, 처방금액: r.rxAmount, 모객닥터명: r.doctorName, 닥터연락처: r.doctorPhone, 요청사항: r.memo, 상태: r.completed ? "처리완료" : "대기", 일시: r.dateString }));
@@ -374,8 +376,9 @@
 
             const add301Account = () => {
                 if(!form301Account.accountName || !form301Account.accountCode) return alert("거래처명과 코드를 입력하세요.");
+                if(!form301Account.doctorCount) return alert("참석 Dr. 수를 입력하세요.");
                 setLocal301List([...local301List, form301Account]);
-                setForm301Account({ accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "" });
+                setForm301Account({ accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorCount: "" });
             };
 
             const submit301All = async () => {
@@ -459,6 +462,38 @@
                 const catMatch = selectedCategory === "전체" ? list : list.filter(m => m.category === selectedCategory);
                 return catMatch.filter(m => m.title.toLowerCase().includes(searchQuery.toLowerCase()));
             }, [messages, activeTab, searchQuery, selectedCategory]);
+
+            // 301 그룹 완료 처리
+            const toggle301GroupStatus = async (docIds, currentStatus) => {
+                if (!user || !window.FB) return;
+                try {
+                    await Promise.all(docIds.map(id => window.FB.updateDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'requests_301', id), { completed: !currentStatus })));
+                } catch(e) { console.error(e); }
+            };
+
+            // 301 그룹 삭제 처리
+            const delete301Group = async (docIds) => {
+                if (!user || !window.FB || !window.confirm("해당 설명회의 모든 거래처 신청 내역을 삭제하시겠습니까?")) return;
+                try {
+                    await Promise.all(docIds.map(id => window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'requests_301', id))));
+                } catch(e) { console.error(e); }
+            };
+
+            // 관리자용 301 신청 현황 그룹핑
+            const grouped301RequestsAdmin = useMemo(() => {
+                const groups = {};
+                requests301.forEach(req => {
+                    const key = `${req.title}_${req.dateString.slice(0, 11)}_${req.empId}`; 
+                    if (!groups[key]) {
+                        groups[key] = { ...req, count: 1, docIds: [req.id] };
+                    } else {
+                        groups[key].count += 1;
+                        groups[key].docIds.push(req.id);
+                        if (!req.completed) groups[key].completed = false; // 하나라도 대기중이면 전체 대기
+                    }
+                });
+                return Object.values(groups).sort((a, b) => b.timestamp - a.timestamp);
+            }, [requests301]);
 
             // 301 신청 현황 그룹핑 (같은 제목, 같은 날짜별로 묶음)
             const grouped301MyRequests = useMemo(() => {
@@ -643,18 +678,20 @@
                                     <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
                                         <div className="p-4 bg-orange-50 font-black text-xs text-orange-600 border-b">301 다기관 설명회 신청 내역 (체크 시 완료 처리)</div>
                                         <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar">
-                                            {requests301.map(item => (
-                                                <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
-                                                    <button onClick={() => toggleStatus('requests_301', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
+                                            {grouped301RequestsAdmin.map((group, idx) => (
+                                                <div key={idx} className={`p-4 flex gap-3 ${group.completed ? 'opacity-50 bg-slate-50' : ''}`}>
+                                                    <button onClick={() => toggle301GroupStatus(group.docIds, group.completed)} className="mt-0.5">
+                                                        {group.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}
+                                                    </button>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className={`text-sm font-bold mt-1 truncate ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{item.title}] {item.accountName} ({item.targetProduct}) - ₩{item.rxAmount}</p>
-                                                        <p className="text-[10px] text-slate-500 truncate">진행: {item.date} | 장소: {item.location}</p>
-                                                        <p className="text-[10px] text-slate-500 truncate">신청: {item.division} {item.team} {item.name}({item.empId}) | 연락처: {item.phone}</p>
+                                                        <p className={`text-sm font-bold mt-1 truncate ${group.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{group.title}] 총 {group.count}건 신청</p>
+                                                        <p className="text-[10px] text-slate-500 truncate">진행: {group.date} | 장소: {group.location}</p>
+                                                        <p className="text-[10px] text-slate-500 truncate">신청: {group.division} {group.team} {group.name}({group.empId})</p>
                                                     </div>
-                                                    <button onClick={() => deleteItem('requests_301', item.id)} className="text-red-400 shrink-0"><Icon name="trash" size={16}/></button>
+                                                    <button onClick={() => delete301Group(group.docIds)} className="text-red-400 shrink-0"><Icon name="trash" size={16}/></button>
                                                 </div>
                                             ))}
-                                            {requests301.length === 0 && <p className="py-10 text-center text-slate-400 italic font-bold">내역이 없습니다.</p>}
+                                            {grouped301RequestsAdmin.length === 0 && <p className="py-10 text-center text-slate-400 italic font-bold">내역이 없습니다.</p>}
                                         </div>
                                     </div>
                                 )}
@@ -1059,17 +1096,18 @@
                                                         <option value="듀비에">듀비에</option>
                                                     </select>
                                                     <input type="number" className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0" placeholder="처방금액(원)" value={form301Account.rxAmount} onChange={e=>setForm301Account({...form301Account, rxAmount: e.target.value})}/>
+                                                    <input type="number" className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0 col-span-2" placeholder="참석 Dr. 수 (명)" value={form301Account.doctorCount} onChange={e=>setForm301Account({...form301Account, doctorCount: e.target.value})}/>
                                                 </div>
                                                 <button type="button" onClick={add301Account} className="w-full bg-slate-800 text-white py-3 mt-2 rounded-xl text-sm font-black flex items-center justify-center gap-1"><Icon name="plus" size={16}/> 목록에 추가</button>
                                             </div>
 
                                             {local301List.length > 0 && (
                                                 <div className="mb-6 border rounded-xl overflow-hidden">
-                                                    <div className="bg-slate-100 p-2 text-xs font-bold text-slate-500">추가된 거래처 ({local301List.length}건)</div>
+                                                    <div className="bg-slate-100 p-2 text-[10px] font-bold text-slate-500">추가된 거래처 ({local301List.length}건)</div>
                                                     <ul className="divide-y max-h-40 overflow-y-auto custom-scrollbar">
                                                         {local301List.map((acc, idx) => (
                                                             <li key={idx} className="p-3 text-left text-xs flex justify-between bg-white items-center">
-                                                                <span><b>{acc.accountName}</b> ({acc.targetProduct}) - {acc.rxAmount}원</span>
+                                                                <span><b>{acc.accountName}</b> ({acc.targetProduct}) - {acc.rxAmount}원 / {acc.doctorCount}명 참석</span>
                                                                 <button onClick={()=>setLocal301List(local301List.filter((_,i)=>i!==idx))} className="text-red-500 p-1"><Icon name="trash" size={14}/></button>
                                                             </li>
                                                         ))}
