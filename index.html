@@ -104,6 +104,12 @@
         // PM 관리자 접속 비밀번호
         const ADMIN_PASSWORD = "1024";
 
+        // 사업부(팀)별 설정 - appId 로 데이터/비번/로그/관리자콘솔 완전 분리
+        const TEAMS = {
+            dm:   { appId: "dm-team-mr-hub-v3",   label: "DM HUB",   full: "DM팀",     defaultPw: "1111", accent: "blue" },
+            onco: { appId: "onco-team-mr-hub-v3", label: "ONCO HUB", full: "항암사업부", defaultPw: "1111", accent: "rose" },
+        };
+
         // 범용 이미지 압축 헬퍼 함수
         const compressImage = (file, callback) => {
             const reader = new FileReader();
@@ -128,7 +134,11 @@
 
         const App = () => {
             const [user, setUser] = useState(null);
-            
+
+            // 사업부(팀) 선택 - 창을 닫으면 초기화, 새로고침엔 유지
+            const [team, setTeam] = useState(sessionStorage.getItem('mr_team') || (sessionStorage.getItem('mr_emp_id') ? 'dm' : ''));
+            const teamInfo = TEAMS[team] || TEAMS.dm;
+
             // SessionStorage를 사용하여 창을 닫으면 자동 로그아웃
             const [empId, setEmpId] = useState(sessionStorage.getItem('mr_emp_id') || "");
             const [isLoggedIn, setIsLoggedIn] = useState(!!sessionStorage.getItem('mr_emp_id'));
@@ -195,16 +205,20 @@
 
             // 2. 실시간 데이터 불러오기
             useEffect(() => {
-                if (!user || !window.FB) return;
-                const { db, appId, collection, doc, setDoc, onSnapshot } = window.FB;
+                if (!user || !window.FB || !team) return;
+                // 선택된 팀에 맞는 데이터 네임스페이스로 전환 (모든 저장/삭제 함수가 이 값을 사용)
+                const appId = TEAMS[team] ? TEAMS[team].appId : TEAMS.dm.appId;
+                window.FB.appId = appId;
+                const defaultPw = (TEAMS[team] || TEAMS.dm).defaultPw;
+                const { db, collection, doc, setDoc, onSnapshot } = window.FB;
 
                 const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (docSnap) => {
                     if (docSnap.exists()) {
-                        setMrPassword(docSnap.data().mrPassword || "1111");
-                        setNewMrPassword(docSnap.data().mrPassword || "1111");
+                        setMrPassword(docSnap.data().mrPassword || defaultPw);
+                        setNewMrPassword(docSnap.data().mrPassword || defaultPw);
                     } else {
-                        setMrPassword("1111");
-                        setNewMrPassword("1111");
+                        setMrPassword(defaultPw);
+                        setNewMrPassword(defaultPw);
                     }
                 });
 
@@ -232,7 +246,7 @@
                 );
 
                 return () => { unsubSettings(); listeners.forEach(unsub => unsub()); };
-            }, [user, isAdminMode]);
+            }, [user, isAdminMode, team]);
 
             // 관리자 탭 로그 불러오기
             const fetchRecentLogs = useCallback(async () => {
@@ -260,10 +274,18 @@
 
             const handleLogout = () => {
                 sessionStorage.removeItem('mr_emp_id');
+                sessionStorage.removeItem('mr_team');
                 setEmpId(""); setLoginEmpId(""); setLoginPassword("");
                 setIsLoggedIn(false); setIsAdminMode(false);
                 setActiveTab("home");
                 setEditingSympId(null);
+                setTeam("");
+            };
+
+            const selectTeam = (t) => {
+                sessionStorage.setItem('mr_team', t);
+                if (window.FB && TEAMS[t]) window.FB.appId = TEAMS[t].appId;
+                setTeam(t);
             };
 
             const logAction = async (actionType, targetTitle) => {
@@ -515,13 +537,31 @@
             }, [symposiumList, sympForm.symposiumName]);
 
             // ===== 화면 렌더링 =====
+            // 0) 사업부(팀) 선택 화면
+            if (!team) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-6 text-center">
+                        <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl">
+                            <div className="w-20 h-20 bg-slate-100 text-slate-700 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner"><Icon name="users" size={40} /></div>
+                            <h1 className="text-2xl font-black text-slate-800 tracking-tight">MR HUB</h1>
+                            <p className="text-slate-400 text-xs mt-2 mb-8 font-bold uppercase tracking-widest">사업부를 선택하세요</p>
+                            <div className="space-y-4">
+                                <button onClick={() => selectTeam('onco')} className="w-full bg-rose-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-rose-700 active:scale-95 transition-all shadow-xl shadow-rose-100">항암사업부</button>
+                                <button onClick={() => selectTeam('dm')} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-100">DM팀</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
             if (!isLoggedIn) {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-6 text-center">
                         <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl">
                             <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner"><Icon name="user" size={40} /></div>
-                            <h1 className="text-2xl font-black text-slate-800 tracking-tight">DM TEAM MR HUB</h1>
-                            <p className="text-slate-400 text-xs mt-2 mb-8 font-bold uppercase tracking-widest text-blue-500">MR 전용 보안 인증</p>
+                            <h1 className="text-2xl font-black text-slate-800 tracking-tight">{teamInfo.label}</h1>
+                            <p className="text-slate-400 text-xs mt-1 font-bold">{teamInfo.full}</p>
+                            <p className="text-slate-400 text-xs mt-2 mb-6 font-bold uppercase tracking-widest text-blue-500">MR 전용 보안 인증</p>
+                            <button type="button" onClick={() => { sessionStorage.removeItem('mr_team'); setTeam(""); }} className="text-[11px] font-bold text-slate-400 hover:text-slate-600 mb-4 underline">← 사업부 다시 선택</button>
                             <form onSubmit={handleUserLogin} className="space-y-4">
                                 <input type="text" inputMode="numeric" pattern="\d*" maxLength={6} className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-center text-lg font-black tracking-widest outline-none focus:border-blue-500" placeholder="사번 (6자리)" value={loginEmpId} onChange={e => setLoginEmpId(e.target.value)} required />
                                 <input type="password" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-center text-lg font-black tracking-widest outline-none focus:border-blue-500" placeholder="접속 암호 (MR용)" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
@@ -538,7 +578,7 @@
                     <header className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-40 px-4 py-4 flex justify-between items-center shadow-sm">
                         <div className="flex items-center gap-2 text-slate-800 uppercase font-black tracking-tighter">
                             <div className="bg-blue-600 p-2 rounded-xl text-white shadow-md"><Icon name="file" size={18}/></div>
-                            <span className="text-lg">DM HUB</span>
+                            <span className="text-lg">{teamInfo.label}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={handleLogout} className="px-3 py-2 rounded-xl text-[10px] font-black text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1 active:scale-95">
