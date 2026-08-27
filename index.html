@@ -26,6 +26,7 @@
                         'fg-muted': 'var(--color-fg-muted)',
                         'fg-subtle':'var(--color-fg-subtle)',
                         line:       'var(--color-border)',
+                        deep:       'var(--color-deep)',
                         primary:    'var(--color-primary)',
                         'primary-hover':'var(--color-primary-hover)',
                         'primary-soft':'var(--color-primary-soft)',
@@ -119,6 +120,7 @@
             --color-fg-muted:      var(--slate-600);   /* 보조 — 흰 배경 대비 7.5:1 */
             --color-fg-subtle:     var(--slate-500);   /* 최소 보조 — 4.8:1, 이보다 옅게 쓰지 말 것 */
             --color-border:        var(--slate-200);
+            --color-deep:          var(--slate-900);   /* 로그인·사업부 선택 화면 배경 */
 
             /* 포인트 컬러 — 3단계에서 관리자가 바꾸면 이 4개만 교체됨 */
             --color-primary:       var(--blue-600);
@@ -236,7 +238,8 @@
                 users: <g><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></g>,
                 presentation: <g><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="M7 21h10"/><path d="M12 16v5"/></g>,
                 helpCircle: <g><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></g>,
-                camera: <g><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></g>
+                camera: <g><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></g>,
+                eyedropper: <g><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></g>
             };
             return (
                 <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -340,18 +343,41 @@
             return (Math.max(la,lb) + 0.05) / (Math.min(la,lb) + 0.05);
         };
         const DEFAULT_POINT = "#2563EB";
+        // 포인트 컬러 하나에서 배경·표면·테두리·글자색까지 한 세트로 파생한다.
+        // 배경은 같은 색이 아니라 같은 '계열'로만 아주 옅게 물들인다(채도를 크게 낮춤).
         const deriveTheme = (hex) => {
             const rgb = hexToRgb(hex);
             if (!rgb) return deriveTheme(DEFAULT_POINT);
             const hsl = rgbToHsl(rgb);
+            const h = hsl.h;
+            const s = hsl.s;
+
             const primary = hslToHex(hsl);
             const hover   = hslToHex({ ...hsl, l: Math.max(0.08, hsl.l - 0.08) });
-            const soft    = hslToHex({ h: hsl.h, s: hsl.s * 0.35, l: 0.95 });
+            const soft    = hslToHex({ h, s: s * 0.35, l: 0.95 });
+
+            // ── 세트 컬러: 같은 색조, 아주 낮은 채도 ──
+            const bg       = hslToHex({ h, s: Math.min(s * 0.22, 0.16), l: 0.975 });
+            const surface2 = hslToHex({ h, s: Math.min(s * 0.28, 0.20), l: 0.958 });
+            const border   = hslToHex({ h, s: Math.min(s * 0.20, 0.14), l: 0.902 });
+            // 본문 글자도 완전 중성 회색 대신 살짝 같은 계열로 (대비는 유지)
+            const fg       = hslToHex({ h, s: Math.min(s * 0.30, 0.22), l: 0.17 });
+            const fgMuted  = hslToHex({ h, s: Math.min(s * 0.22, 0.16), l: 0.36 });
+            const fgSubtle = hslToHex({ h, s: Math.min(s * 0.18, 0.14), l: 0.48 });
+            // 로그인/사업부 선택 화면의 짙은 배경
+            const deep     = hslToHex({ h, s: Math.min(s * 0.55, 0.45), l: 0.12 });
+
             // 흰 글씨와 짙은 글씨 중 대비가 높은 쪽을 자동 선택
             const onWhite = contrastRatio(primary, "#FFFFFF");
             const onDark  = contrastRatio(primary, "#0F172A");
             const onPrimary = onWhite >= onDark ? "#FFFFFF" : "#0F172A";
-            return { primary, hover, soft, onPrimary, contrast: Math.max(onWhite, onDark) };
+
+            return {
+                primary, hover, soft, onPrimary,
+                bg, surface2, border, fg, fgMuted, fgSubtle, deep,
+                contrast: Math.max(onWhite, onDark),
+                bodyContrast: contrastRatio(fg, bg)
+            };
         };
 
         const App = () => {
@@ -423,6 +449,8 @@
                 companyLogo: "",
                 companyName: "종근당",
                 appTitle: "MR HUB",
+                divisionPrompt: "소속 사업부를 선택하세요",
+                loginPrompt: "MR 전용 보안 인증",
                 pointColor: DEFAULT_POINT,
                 adminPassword: "0000",   // 최초 1회용. 설정 화면에서 바꾸면 Firestore에만 저장됨
                 divisions: [
@@ -466,6 +494,15 @@
                 r.setProperty('--color-primary-hover', theme.hover);
                 r.setProperty('--color-primary-soft',  theme.soft);
                 r.setProperty('--color-on-primary',    theme.onPrimary);
+                // 세트 컬러 — 배경/표면/테두리/글자까지 같은 계열로
+                r.setProperty('--color-bg',        theme.bg);
+                r.setProperty('--color-surface-2', theme.surface2);
+                r.setProperty('--color-border',    theme.border);
+                r.setProperty('--color-fg',        theme.fg);
+                r.setProperty('--color-fg-muted',  theme.fgMuted);
+                r.setProperty('--color-fg-subtle', theme.fgSubtle);
+                r.setProperty('--color-deep',      theme.deep);
+                document.body.style.background = theme.bg;
             }, [theme]);
 
             // 모든 Firestore 경로는 이 두 헬퍼만 거친다 (경로 오타로 데이터가 안 보이는 사고 방지)
@@ -873,6 +910,24 @@
                 setBrandAuthInput("");
             };
 
+            // 스포이드 — 화면 어디서든 색을 집어온다 (Chrome/Edge 지원)
+            const eyeDropperSupported = typeof window !== "undefined" && "EyeDropper" in window;
+            const pickWithEyeDropper = async () => {
+                if (!eyeDropperSupported) {
+                    toast("이 브라우저는 스포이드를 지원하지 않습니다. 크롬이나 엣지에서 사용해주세요.", "error");
+                    return;
+                }
+                try {
+                    const result = await new window.EyeDropper().open();
+                    if (result && result.sRGBHex) {
+                        setBrandDraft(d => ({ ...d, pointColor: result.sRGBHex }));
+                        toast(`색상 ${result.sRGBHex} 을(를) 가져왔습니다.`, "success");
+                    }
+                } catch (e) {
+                    // 사용자가 Esc로 취소한 경우 — 조용히 넘어감
+                }
+            };
+
             const brandLogoUpload = (e, apply) => {
                 const file = e.target.files && e.target.files[0];
                 e.target.value = "";           // 같은 파일 재선택 가능하도록
@@ -991,18 +1046,47 @@
                                        style={{ minHeight: 'var(--input-h)' }} />
                             </section>
 
+                            {/* 첫 화면 문구 */}
+                            <section className="bg-surface rounded-lg border border-line p-5 shadow-card">
+                                <h2 className="text-label font-bold text-fg-muted mb-4">첫 화면 문구</h2>
+
+                                <label htmlFor="bd-divprompt" className="block text-label font-medium text-fg mb-2">사업부 선택 안내</label>
+                                <input id="bd-divprompt" value={brandDraft.divisionPrompt || ""}
+                                       onChange={e => setBrandDraft(d => ({...d, divisionPrompt: e.target.value}))}
+                                       placeholder="소속 사업부를 선택하세요"
+                                       className="w-full px-4 rounded-md border border-line bg-surface text-fg mb-4"
+                                       style={{ minHeight: 'var(--input-h)' }} />
+
+                                <label htmlFor="bd-loginprompt" className="block text-label font-medium text-fg mb-2">로그인 화면 안내</label>
+                                <input id="bd-loginprompt" value={brandDraft.loginPrompt || ""}
+                                       onChange={e => setBrandDraft(d => ({...d, loginPrompt: e.target.value}))}
+                                       placeholder="MR 전용 보안 인증"
+                                       className="w-full px-4 rounded-md border border-line bg-surface text-fg"
+                                       style={{ minHeight: 'var(--input-h)' }} />
+                            </section>
+
                             {/* 포인트 컬러 */}
                             <section className="bg-surface rounded-lg border border-line p-5 shadow-card">
                                 <h2 className="text-label font-bold text-fg-muted mb-4">포인트 컬러</h2>
-                                <div className="flex items-center gap-3 mb-4">
+                                <div className="flex items-center gap-2 mb-4">
                                     <input type="color" aria-label="포인트 컬러 선택"
                                            value={draftTheme.primary}
                                            onChange={e => setBrandDraft(d => ({...d, pointColor: e.target.value}))}
-                                           className="w-14 h-14 rounded-md border border-line cursor-pointer bg-surface p-1" />
+                                           className="w-14 h-14 shrink-0 rounded-md border border-line cursor-pointer bg-surface p-1" />
+
+                                    {/* 스포이드 */}
+                                    <button onClick={pickWithEyeDropper}
+                                            aria-label="스포이드로 화면에서 색 선택"
+                                            title={eyeDropperSupported ? "화면 어디서든 색을 집어옵니다" : "이 브라우저는 지원하지 않습니다"}
+                                            className={`w-14 h-14 shrink-0 rounded-md border border-line flex items-center justify-center transition-colors ${
+                                                eyeDropperSupported ? 'bg-surface text-fg-muted hover:bg-primary-soft hover:text-primary' : 'bg-surface-2 text-fg-subtle'}`}>
+                                        <Icon name="eyedropper" size={20} aria-hidden="true" />
+                                    </button>
+
                                     <input aria-label="포인트 컬러 색상 코드"
                                            value={brandDraft.pointColor}
                                            onChange={e => setBrandDraft(d => ({...d, pointColor: e.target.value}))}
-                                           className="flex-1 px-4 rounded-md border border-line bg-surface text-fg font-mono"
+                                           className="flex-1 min-w-0 px-4 rounded-md border border-line bg-surface text-fg font-mono"
                                            style={{ minHeight: 'var(--input-h)' }} />
                                 </div>
                                 <div className="flex flex-wrap gap-2 mb-5">
@@ -1015,18 +1099,41 @@
                                 </div>
 
                                 {/* 미리보기 + 실시간 대비 검사 */}
-                                <div className="rounded-md border border-line p-4 bg-surface-2">
-                                    <p className="text-caption font-bold text-fg-muted mb-3">미리보기</p>
-                                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                                <p className="text-caption font-bold text-fg-muted mb-2">세트 컬러 (자동 생성)</p>
+                                <div className="flex gap-1 mb-4 rounded-md overflow-hidden border border-line">
+                                    {[['배경', draftTheme.bg], ['표면', draftTheme.surface2], ['테두리', draftTheme.border],
+                                      ['포인트', draftTheme.primary], ['진한 배경', draftTheme.deep]].map(([name, c]) => (
+                                        <div key={name} className="flex-1 text-center">
+                                            <div className="h-10" style={{ background: c }} />
+                                            <div className="text-caption text-fg-muted py-1 px-1 bg-surface truncate">{name}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* 실제 화면 미리보기 — 배경까지 함께 바뀌는 걸 보여줌 */}
+                                <div className="rounded-md border p-4" style={{ background: draftTheme.bg, borderColor: draftTheme.border }}>
+                                    <p className="text-caption font-bold mb-3" style={{ color: draftTheme.fgMuted }}>미리보기</p>
+                                    <div className="rounded-md p-3 mb-3" style={{ background: '#FFFFFF', border: `1px solid ${draftTheme.border}` }}>
+                                        <div className="text-label font-bold mb-1" style={{ color: draftTheme.fg }}>자료 제목이 이렇게 보입니다</div>
+                                        <div className="text-caption" style={{ color: draftTheme.fgMuted }}>보조 설명은 이 색으로 표시됩니다</div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <span className="tap inline-flex items-center px-5 rounded-md font-bold text-label"
                                               style={{ background: draftTheme.primary, color: draftTheme.onPrimary }}>입장하기</span>
                                         <span className="tap inline-flex items-center px-4 rounded-md font-bold text-label"
                                               style={{ background: draftTheme.soft, color: draftTheme.primary }}>활성 탭</span>
                                     </div>
+                                </div>
+
+                                <div className="mt-3 space-y-1">
                                     <p className={`text-caption font-bold flex items-center gap-2 ${draftTheme.contrast >= 4.5 ? 'text-success' : 'text-danger'}`}>
                                         <Icon name={draftTheme.contrast >= 4.5 ? 'checkCircle' : 'helpCircle'} size={14} aria-hidden="true" />
                                         버튼 글씨 대비 {draftTheme.contrast.toFixed(1)}:1 —
                                         {draftTheme.contrast >= 4.5 ? ' 읽기 좋습니다' : ' 기준(4.5:1) 미달, 더 진한 색을 권합니다'}
+                                    </p>
+                                    <p className={`text-caption font-bold flex items-center gap-2 ${draftTheme.bodyContrast >= 4.5 ? 'text-success' : 'text-danger'}`}>
+                                        <Icon name={draftTheme.bodyContrast >= 4.5 ? 'checkCircle' : 'helpCircle'} size={14} aria-hidden="true" />
+                                        본문 대비 {draftTheme.bodyContrast.toFixed(1)}:1
                                     </p>
                                 </div>
                             </section>
@@ -1147,7 +1254,7 @@
             if (!isLoggedIn) {
                 const needsDivision = !currentDivision;
                 return (
-                    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 p-6 relative">
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-deep p-6 relative">
                         <div className="bg-surface w-full max-w-sm rounded-lg p-8 shadow-modal">
 
                             {/* 종근당 로고 (설정 화면에서 교체 가능) */}
@@ -1165,7 +1272,7 @@
                             {/* ── 1단계: 사업부 선택 ── */}
                             {needsDivision ? (
                                 <>
-                                    <p className="text-caption font-medium text-fg-muted mt-2 mb-6 text-center">소속 사업부를 선택하세요</p>
+                                    <p className="text-caption font-medium text-fg-muted mt-2 mb-6 text-center">{brand.divisionPrompt}</p>
                                     <div className="grid grid-cols-2 gap-3">
                                         {brand.divisions.map(d => (
                                             <button key={d.id} onClick={() => selectDivision(d)}
@@ -1189,6 +1296,7 @@
                             ) : (
                             <>
                             {/* ── 2단계: 로그인 ── */}
+                            <p className="text-caption font-medium text-fg-muted mt-2 text-center">{brand.loginPrompt}</p>
                             <div className="flex items-center justify-center gap-2 mt-3 mb-6">
                                 {currentDivision.logo && <img src={currentDivision.logo} alt="" className="h-6 w-auto object-contain" />}
                                 <span className="text-label font-bold text-primary">{currentDivision.label}</span>
