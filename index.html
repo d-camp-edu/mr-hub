@@ -568,9 +568,12 @@
             // ===== 사업부별 데이터 공간 =====
             // 주의: DM팀은 기존 데이터가 전부 여기 있으므로 이 값을 절대 바꾸지 말 것.
             const DEFAULT_APP_ID = "dm-team-mr-hub-v3";
-            const [activeAppId, setActiveAppId] = useState(
-                sessionStorage.getItem('mr_app_id') || DEFAULT_APP_ID
-            );
+            const [activeAppId, setActiveAppId] = useState(() => {
+                const saved = sessionStorage.getItem('mr_app_id');
+                // 이전 세션에 저장된 잘못된 값 교정 (아래 LEGACY_APPID와 동일 규칙)
+                if (saved === "onco-mr-hub-v1") return "onco-team-mr-hub-v3";
+                return saved || DEFAULT_APP_ID;
+            });
             // 선택된 사업부 id. 없으면 사업부 선택 화면부터 시작.
             const [divisionId, setDivisionId] = useState(sessionStorage.getItem('mr_div_id') || "");
 
@@ -603,6 +606,16 @@
             const [brandDraft, setBrandDraft] = useState(null);
             const [brandSaving, setBrandSaving] = useState(false);
 
+            // 잘못 저장된 데이터 공간 값 교정.
+            // onco-mr-hub-v1은 실제로 쓰인 적 없는 빈 공간이고(전체 0건),
+            // 항암사업부의 실 데이터는 onco-team-mr-hub-v3에 있다(자료 11건·분류 10종).
+            const LEGACY_APPID = { "onco-mr-hub-v1": "onco-team-mr-hub-v3" };
+            const normalizeDivisions = useCallback((list) =>
+                (list || []).map(d => LEGACY_APPID[d.dataAppId]
+                    ? { ...d, dataAppId: LEGACY_APPID[d.dataAppId] }
+                    : d
+                ), []);
+
             // 브랜드 문서 구독 — activeAppId와 독립
             useEffect(() => {
                 if (!user || !window.FB) return;
@@ -612,10 +625,12 @@
                     setBrand(prev => ({
                         ...prev,
                         ...d,
-                        divisions: Array.isArray(d.divisions) && d.divisions.length ? d.divisions : prev.divisions
+                        divisions: Array.isArray(d.divisions) && d.divisions.length
+                            ? normalizeDivisions(d.divisions)
+                            : prev.divisions
                     }));
                 }, (e) => console.error("브랜드 설정 구독 오류:", e));
-            }, [user, brandRef]);
+            }, [user, brandRef, normalizeDivisions]);
 
             // 포인트 컬러를 CSS 변수에 반영 (토큰을 쓰는 모든 화면에 즉시 전파)
             const theme = useMemo(() => deriveTheme(brand.pointColor), [brand.pointColor]);
