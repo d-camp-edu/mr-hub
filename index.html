@@ -2,13 +2,62 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>DM TEAM MR HUB</title>
+    <!-- 폰트: @import 대신 link + swap (렌더 블로킹 제거) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <!-- 외부 라이브러리 (CDN) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // 디자인 토큰을 Tailwind 유틸리티로 연결 (bg-surface, text-fg, rounded-lg …)
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg:         'var(--color-bg)',
+                        surface:    'var(--color-surface)',
+                        'surface-2':'var(--color-surface-2)',
+                        fg:         'var(--color-fg)',
+                        'fg-muted': 'var(--color-fg-muted)',
+                        'fg-subtle':'var(--color-fg-subtle)',
+                        line:       'var(--color-border)',
+                        primary:    'var(--color-primary)',
+                        'primary-hover':'var(--color-primary-hover)',
+                        'primary-soft':'var(--color-primary-soft)',
+                        'on-primary':'var(--color-on-primary)',
+                        danger:     'var(--color-danger)',
+                        'danger-soft':'var(--color-danger-soft)',
+                        success:    'var(--color-success)',
+                        'success-soft':'var(--color-success-soft)',
+                        warning:    'var(--color-warning)',
+                        'warning-soft':'var(--color-warning-soft)'
+                    },
+                    borderRadius: {
+                        sm: 'var(--radius-sm)',
+                        md: 'var(--radius-md)',
+                        lg: 'var(--radius-lg)',
+                        xl: 'var(--radius-lg)'   /* 기존 rounded-xl 66곳을 lg로 수렴 */
+                    },
+                    fontSize: {
+                        caption: ['12px', { lineHeight: '1.4' }],
+                        label:   ['14px', { lineHeight: '1.4' }],
+                        body:    ['16px', { lineHeight: '1.6' }],
+                        title:   ['18px', { lineHeight: '1.4' }],
+                        display: ['24px', { lineHeight: '1.3' }]
+                    },
+                    boxShadow: {
+                        card:  'var(--elev-card)',
+                        modal: 'var(--elev-modal)'
+                    }
+                }
+            }
+        };
+    </script>
     <!-- 엑셀 추출용 라이브러리 (다중 시트 지원) -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     
@@ -42,15 +91,107 @@
     </script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
-        body { font-family: 'Noto Sans KR', sans-serif; -webkit-tap-highlight-color: transparent; }
+        /* ═══════════ Layer 1: PRIMITIVE (원시값) ═══════════ */
+        :root {
+            --slate-50:#F8FAFC;  --slate-100:#F1F5F9; --slate-200:#E2E8F0;
+            --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+            --slate-600:#475569; --slate-700:#334155; --slate-800:#1E293B; --slate-900:#0F172A;
+            --blue-50:#EFF6FF;   --blue-600:#2563EB;  --blue-700:#1D4ED8;
+            --red-50:#FEF2F2;    --red-600:#DC2626;   --red-700:#B91C1C;
+            --green-50:#F0FDF4;  --green-600:#16A34A;
+            --amber-50:#FFFBEB;  --amber-600:#D97706;
+
+            --space-1:4px;  --space-2:8px;  --space-3:12px;
+            --space-4:16px; --space-6:24px; --space-8:32px; --space-12:48px;
+
+            --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-pill:999px;
+        }
+
+        /* ═══════════ Layer 2: SEMANTIC (역할) ═══════════ */
+        :root {
+            --color-bg:            var(--slate-50);
+            --color-surface:       #FFFFFF;
+            --color-surface-2:     var(--slate-50);
+            --color-fg:            var(--slate-800);   /* 본문 */
+            --color-fg-muted:      var(--slate-600);   /* 보조 — 흰 배경 대비 7.5:1 */
+            --color-fg-subtle:     var(--slate-500);   /* 최소 보조 — 4.8:1, 이보다 옅게 쓰지 말 것 */
+            --color-border:        var(--slate-200);
+
+            /* 포인트 컬러 — 3단계에서 관리자가 바꾸면 이 4개만 교체됨 */
+            --color-primary:       var(--blue-600);
+            --color-primary-hover: var(--blue-700);
+            --color-primary-soft:  var(--blue-50);
+            --color-on-primary:    #FFFFFF;
+
+            --color-danger:        var(--red-600);     /* 삭제 전용. 다른 용도 금지 */
+            --color-danger-soft:   var(--red-50);
+            --color-success:       var(--green-600);
+            --color-success-soft:  var(--green-50);
+            --color-warning:       var(--amber-600);
+            --color-warning-soft:  var(--amber-50);
+
+            --elev-card:  0 1px 2px rgba(15,23,42,.06);
+            --elev-modal: 0 12px 32px rgba(15,23,42,.18);
+            --focus-ring: 3px;
+            --touch-min:  44px;
+        }
+
+        /* ═══════════ Layer 3: COMPONENT ═══════════ */
+        :root {
+            --card-radius: var(--radius-lg);
+            --card-pad:    var(--space-4);
+            --btn-h:       48px;
+            --input-h:     52px;
+            --chip-h:      44px;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', system-ui, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            color: var(--color-fg);
+            background: var(--color-bg);
+        }
+
+        /* 포커스 링 — 기존 outline-none 27곳을 덮어씀 (키보드 사용 시에만 노출) */
+        :focus-visible {
+            outline: var(--focus-ring) solid var(--color-primary) !important;
+            outline-offset: 2px !important;
+            border-radius: var(--radius-sm);
+        }
+
+        /* 터치 타깃 최소 44px — .tap 을 붙인 요소에 적용 */
+        .tap { min-height: var(--touch-min); min-width: var(--touch-min); }
+        .tap-icon {
+            min-height: var(--touch-min); min-width: var(--touch-min);
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+
+        /* 12px 미만 텍스트 방지용 유틸 (기존 text-[9~11px] 대체) */
+        .text-caption { font-size: 12px; line-height: 1.4; }
+
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: var(--slate-300); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: var(--slate-400); }
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+
+        /* iOS 입력 자동확대 방지 — user-scalable=no 대신 이걸로 해결 (수동 확대는 가능) */
         input, select, textarea { font-size: 16px !important; }
+
+        /* 토스트 */
+        .toast-enter { animation: toastIn .22s cubic-bezier(.16,1,.3,1); }
+        .toast-exit  { animation: toastOut .15s ease forwards; }
+        @keyframes toastIn  { from { opacity:0; transform: translateY(12px) } to { opacity:1; transform:none } }
+        @keyframes toastOut { to { opacity:0; transform: translateY(8px) } }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: .01ms !important;
+                transition-duration: .01ms !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-slate-50">
@@ -181,6 +322,30 @@
 
             const [photoForm, setPhotoForm] = useState({ division: "", team: "", name: "", photoBase64: "" });
 
+            // ===== 토스트 / 확인 모달 (alert·confirm 대체) =====
+            const [toasts, setToasts] = useState([]);
+            const [confirmState, setConfirmState] = useState(null);
+
+            const toast = useCallback((message, kind = "info") => {
+                const id = Date.now() + Math.random();
+                setToasts(list => [...list, { id, message, kind }]);
+                setTimeout(() => setToasts(list => list.filter(t => t.id !== id)), 4000);
+            }, []);
+
+            // confirm()과 동일한 자리에서 쓰되 await 필요: if (!(await askConfirm(...))) return;
+            const askConfirm = useCallback((message, opts = {}) => new Promise(resolve => {
+                setConfirmState({
+                    message,
+                    confirmLabel: opts.confirmLabel || "삭제",
+                    danger: opts.danger !== false,
+                    resolve
+                });
+            }), []);
+
+            const closeConfirm = useCallback((result) => {
+                setConfirmState(s => { s && s.resolve(result); return null; });
+            }, []);
+
             useEffect(() => {
                 const init = setInterval(() => {
                     if (window.FB) {
@@ -250,8 +415,8 @@
             // 로그인 / 로그아웃 처리
             const handleUserLogin = (e) => {
                 e.preventDefault();
-                if (!/^\d{6}$/.test(loginEmpId.trim())) return alert("사번 6자리를 숫자로 입력하세요.");
-                if (loginPassword.trim() !== mrPassword.trim()) return alert("접속 암호가 일치하지 않습니다.");
+                if (!/^\d{6}$/.test(loginEmpId.trim())) return toast("사번 6자리를 숫자로 입력하세요.", "error");
+                if (loginPassword.trim() !== mrPassword.trim()) return toast("접속 암호가 일치하지 않습니다.", "error");
                 sessionStorage.setItem('mr_emp_id', loginEmpId.trim());
                 setEmpId(loginEmpId.trim());
                 setIsLoggedIn(true);
@@ -283,7 +448,8 @@
             };
 
             const deleteItem = async (collectionName, itemId) => {
-                if (!user || !window.FB || !window.confirm("정말 삭제하시겠습니까?")) return;
+                if (!user || !window.FB) return;
+                if (!(await askConfirm("정말 삭제하시겠습니까? 되돌릴 수 없습니다."))) return;
                 await window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', collectionName, itemId));
             };
 
@@ -318,14 +484,14 @@
                         const updatePromises = msgsToUpdate.map(m => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'messages', m.id), { category: finalName }));
                         await Promise.all(updatePromises);
                     }
-                    alert("카테고리명이 수정되었습니다.");
+                    toast("카테고리명이 수정되었습니다.", "success");
                 } catch (error) { console.error(error); }
                 setEditingCategoryId(null);
             };
 
             // 통합 엑셀 다운로드 (다중 시트 지원, 최신순 정렬)
             const handleDownloadExcel = async () => {
-                if (!window.XLSX) return alert("엑셀 모듈 로딩 중입니다. 잠시 후 시도해주세요.");
+                if (!window.XLSX) return toast("엑셀 모듈 로딩 중입니다. 잠시 후 시도해주세요.", "error");
                 try {
                     const wb = window.XLSX.utils.book_new();
                     const sortDesc = (arr) => [...arr].sort((a,b) => b.timestamp - a.timestamp); // 항상 최신순이 맨 위로
@@ -349,19 +515,19 @@
                     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(inqData), "문의건의");
 
                     window.XLSX.writeFile(wb, `DM_HUB_REPORT_${new Date().toISOString().slice(0,10)}.xlsx`);
-                } catch(e) { alert("엑셀 생성 중 오류가 발생했습니다."); }
+                } catch(e) { toast("엑셀 생성 중 오류가 발생했습니다.", "error"); }
             };
 
             // 사용자 폼 제출 핸들러
             const submitPhoto = async (e) => {
                 e.preventDefault();
                 if (!user || !window.FB) return;
-                if (!photoForm.photoBase64) return alert("사진을 업로드해주세요.");
+                if (!photoForm.photoBase64) return toast("사진을 업로드해주세요.", "error");
                 await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'brochure_photos'), {
                     ...photoForm, empId, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR')
                 });
                 logAction("인증사진 업로드", `${photoForm.division} ${photoForm.name}`);
-                alert("인증 사진이 성공적으로 업로드되었습니다.");
+                toast("인증 사진이 성공적으로 업로드되었습니다.", "success");
                 setPhotoForm({ division: "", team: "", name: "", photoBase64: "" });
             };
 
@@ -370,22 +536,22 @@
                 if (!user || !window.FB) return;
                 await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'requests'), { ...requestForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
                 logAction("브로슈어 신청", requestForm.brochureName);
-                alert("신청이 완료되었습니다.");
+                toast("신청이 완료되었습니다.", "success");
                 setRequestForm({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
             };
 
             const add301Account = () => {
-                if(!form301Account.accountName || !form301Account.accountCode) return alert("거래처명과 코드를 입력하세요.");
-                if(!form301Account.doctorCount) return alert("참석 Dr. 수를 입력하세요.");
+                if(!form301Account.accountName || !form301Account.accountCode) return toast("거래처명과 코드를 입력하세요.", "error");
+                if(!form301Account.doctorCount) return toast("참석 Dr. 수를 입력하세요.", "error");
                 setLocal301List([...local301List, form301Account]);
                 setForm301Account({ accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorCount: "" });
             };
 
             const submit301All = async () => {
                 if(!user || !window.FB) return;
-                if(local301List.length === 0) return alert("추가된 거래처가 없습니다.");
-                if(!form301Info.title || !form301Info.date || !form301Info.location) return alert("설명회 기본 정보를 모두 입력하세요.");
-                if(!form301Info.division || !form301Info.name) return alert("담당자 정보를 모두 입력하세요.");
+                if(local301List.length === 0) return toast("추가된 거래처가 없습니다.", "error");
+                if(!form301Info.title || !form301Info.date || !form301Info.location) return toast("설명회 기본 정보를 모두 입력하세요.", "error");
+                if(!form301Info.division || !form301Info.name) return toast("담당자 정보를 모두 입력하세요.", "error");
                 try {
                     await Promise.all(local301List.map(acc => 
                         window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'requests_301'), {
@@ -393,10 +559,10 @@
                         })
                     ));
                     logAction("301 설명회 신청", `[${form301Info.title}] ${local301List.length}건 등록`);
-                    alert("301 다기관 설명회 신청이 완료되었습니다.");
+                    toast("301 다기관 설명회 신청이 완료되었습니다.", "success");
                     setLocal301List([]);
                     setForm301Info({ title: "", date: "", location: "", division: "", team: "", name: "", phone: "" });
-                } catch(e) { alert("오류 발생"); }
+                } catch(e) { toast("오류 발생", "error"); }
             };
 
             const submitSymp = async (e) => {
@@ -404,7 +570,7 @@
                 if (!user || !window.FB) return;
                 await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'symposium_requests'), { ...sympForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
                 logAction("심포지엄 모객", sympForm.symposiumName);
-                alert("모객 리스트에 등록되었습니다.");
+                toast("모객 리스트에 등록되었습니다.", "success");
                 setSympForm({ symposiumName: "", division: "", team: "", name: "", phone: "", accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorName: "", doctorPhone: "", memo: "" });
             };
 
@@ -413,7 +579,7 @@
                 if (!user || !window.FB) return;
                 await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'inquiries'), { ...inquiryForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
                 logAction("문의/건의 등록", inquiryForm.division);
-                alert("성공적으로 접수되었습니다.");
+                toast("성공적으로 접수되었습니다.", "success");
                 setInquiryForm({ division: "", team: "", name: "", content: "" });
             };
 
@@ -447,10 +613,10 @@
                 
                 if (editingId) {
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'messages', editingId), data);
-                    alert("수정되었습니다.");
+                    toast("수정되었습니다.", "success");
                 } else {
                     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), data);
-                    alert("등록되었습니다.");
+                    toast("등록되었습니다.", "success");
                 }
                 setEditingId(null);
                 setFormState({ title: "", category: "", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "", thumbnail: "" });
@@ -473,7 +639,8 @@
 
             // 301 그룹 삭제 처리
             const delete301Group = async (docIds) => {
-                if (!user || !window.FB || !window.confirm("해당 설명회의 모든 거래처 신청 내역을 삭제하시겠습니까?")) return;
+                if (!user || !window.FB) return;
+                if (!(await askConfirm(`해당 설명회의 거래처 신청 내역 ${docIds.length}건을 삭제하시겠습니까? 되돌릴 수 없습니다.`))) return;
                 try {
                     await Promise.all(docIds.map(id => window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'requests_301', id))));
                 } catch(e) { console.error(e); }
@@ -588,7 +755,7 @@
                                         <div className="flex items-center justify-center sm:justify-start gap-2 mt-3 bg-slate-50 p-2 rounded-xl border w-full overflow-hidden">
                                             <span className="text-[10px] font-bold text-slate-500 shrink-0">MR 암호:</span>
                                             <input className="flex-1 min-w-0 p-1 bg-white border rounded text-xs font-black text-center outline-none" value={newMrPassword} onChange={e=>setNewMrPassword(e.target.value)} />
-                                            <button onClick={() => { window.FB.setDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'settings', 'config'), { mrPassword: newMrPassword }, { merge: true }); alert("암호 변경완료"); }} className="bg-slate-800 text-white px-2 py-1.5 rounded text-[10px] font-black shrink-0">변경</button>
+                                            <button onClick={() => { window.FB.setDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'settings', 'config'), { mrPassword: newMrPassword }, { merge: true }); toast("암호 변경완료", "success"); }} className="bg-slate-800 text-white px-2 py-1.5 rounded text-[10px] font-black shrink-0">변경</button>
                                         </div>
                                     </div>
                                     <button onClick={handleDownloadExcel} className="w-full sm:w-auto bg-green-600 text-white px-6 py-4 rounded-2xl text-xs font-black flex items-center justify-center gap-2 shadow-md hover:bg-green-700 shrink-0">
@@ -619,7 +786,7 @@
                                                         <p className="font-bold line-clamp-1">{photo.division} {photo.team} {photo.name}</p>
                                                         <p className="opacity-80">{photo.dateString.slice(0, 11)}</p>
                                                     </div>
-                                                    <button onClick={() => deleteItem('brochure_photos', photo.id)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded"><Icon name="trash" size={12}/></button>
+                                                    <button onClick={() => deleteItem('brochure_photos', photo.id)} className="tap-icon absolute top-1 right-1 bg-red-500 text-white p-1 rounded" aria-label="삭제"><Icon name="trash" size={12} aria-hidden="true"/></button>
                                                 </div>
                                             ))}
                                             {brochurePhotos.length === 0 && <p className="col-span-2 sm:col-span-3 text-center text-slate-400 py-10">등록된 사진이 없습니다.</p>}
@@ -641,7 +808,7 @@
                                                 setNewBrochureName("");
                                             }} className="flex gap-2 w-full">
                                                 <input className="flex-1 min-w-0 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="예: 24년형 메인 리플렛" value={newBrochureName} onChange={e => setNewBrochureName(e.target.value)} required />
-                                                <button type="submit" className="shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
+                                                <button type="submit" className="tap-icon shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95" aria-label="추가"><Icon name="plus" size={20} aria-hidden="true"/></button>
                                             </form>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
@@ -650,7 +817,7 @@
                                                 {messages.filter(m => m.category === "제품 브로슈어").map(item => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center text-left">
                                                         <span className="font-bold text-sm text-slate-800">{item.title}</span>
-                                                        <button onClick={() => window.confirm("삭제하시겠습니까?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'messages', item.id))} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash" size={18}/></button>
+                                                        <button onClick={async () => { if (await askConfirm(`"${item.title}" 항목을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) { await window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'messages', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-slate-300 hover:text-red-500" aria-label="삭제"><Icon name="trash" size={18} aria-hidden="true"/></button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -665,7 +832,7 @@
                                                             <p className={`text-sm font-bold mt-1 truncate ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>{item.brochureName} ({item.quantity}부)</p>
                                                             <p className="text-[10px] text-slate-500">{item.accountName} | {item.requesterName}({item.empId}) | {item.phone}</p>
                                                         </div>
-                                                        <button onClick={() => deleteItem('requests', item.id)} className="text-red-400 shrink-0"><Icon name="trash" size={16}/></button>
+                                                        <button onClick={() => deleteItem('requests', item.id)} className="tap-icon text-red-400 shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -688,7 +855,7 @@
                                                         <p className="text-[10px] text-slate-500 truncate">진행: {group.date} | 장소: {group.location}</p>
                                                         <p className="text-[10px] text-slate-500 truncate">신청: {group.division} {group.team} {group.name}({group.empId})</p>
                                                     </div>
-                                                    <button onClick={() => delete301Group(group.docIds)} className="text-red-400 shrink-0"><Icon name="trash" size={16}/></button>
+                                                    <button onClick={() => delete301Group(group.docIds)} className="tap-icon text-red-400 shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                 </div>
                                             ))}
                                             {grouped301RequestsAdmin.length === 0 && <p className="py-10 text-center text-slate-400 italic font-bold">내역이 없습니다.</p>}
@@ -712,7 +879,7 @@
                                                     {newSympAgendaBase64 && (
                                                         <div className="relative shrink-0">
                                                             <img src={newSympAgendaBase64} className="h-10 w-10 object-cover rounded shadow" alt="agenda" />
-                                                            <button type="button" onClick={() => setNewSympAgendaBase64("")} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm"><Icon name="trash" size={12}/></button>
+                                                            <button type="button" onClick={() => setNewSympAgendaBase64("")} className="tap-icon absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm" aria-label="삭제"><Icon name="trash" size={12} aria-hidden="true"/></button>
                                                         </div>
                                                     )}
                                                 </div>
@@ -721,10 +888,10 @@
                                                         if(!newSymposiumName || !window.FB) return; 
                                                         if (editingSympId) {
                                                             await window.FB.updateDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'symposium_list', editingSympId), { name: newSymposiumName, agendaImage: newSympAgendaBase64 }); 
-                                                            alert("수정되었습니다.");
+                                                            toast("수정되었습니다.", "success");
                                                         } else {
                                                             await window.FB.addDoc(window.FB.collection(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'symposium_list'), { name: newSymposiumName, agendaImage: newSympAgendaBase64, timestamp: Date.now() }); 
-                                                            alert("추가되었습니다.");
+                                                            toast("추가되었습니다.", "success");
                                                         }
                                                         setNewSymposiumName(""); setNewSympAgendaBase64(""); setEditingSympId(null);
                                                     }} className="flex-1 bg-blue-600 text-white p-3 rounded-xl font-bold flex justify-center items-center gap-2"><Icon name={editingSympId ? "save" : "plus"} size={18}/> {editingSympId ? "저장" : "심포지엄 추가"}</button>
@@ -742,8 +909,8 @@
                                                             <span className="font-bold text-sm truncate">{item.name}</span>
                                                         </div>
                                                         <div className="flex gap-1 shrink-0">
-                                                            <button onClick={() => { setEditingSympId(item.id); setNewSymposiumName(item.name); setNewSympAgendaBase64(item.agendaImage || ""); window.scrollTo(0,0); }} className="p-2 text-slate-400 hover:text-blue-600"><Icon name="edit" size={16}/></button>
-                                                            <button onClick={() => deleteItem('symposium_list', item.id)} className="p-2 text-slate-400 hover:text-red-500"><Icon name="trash" size={16}/></button>
+                                                            <button onClick={() => { setEditingSympId(item.id); setNewSymposiumName(item.name); setNewSympAgendaBase64(item.agendaImage || ""); window.scrollTo(0,0); }} className="tap-icon p-2 text-slate-400 hover:text-blue-600" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
+                                                            <button onClick={() => deleteItem('symposium_list', item.id)} className="tap-icon p-2 text-slate-400 hover:text-red-500" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -761,7 +928,7 @@
                                                             <p className="text-[10px] text-slate-500 truncate">신청: {item.division} {item.team} {item.name}({item.empId}) | {item.phone}</p>
                                                             {item.memo && <p className="text-[10px] bg-slate-100 p-2 rounded mt-1 text-slate-600 break-words">요청: {item.memo}</p>}
                                                         </div>
-                                                        <button onClick={() => deleteItem('symposium_requests', item.id)} className="text-red-400 shrink-0"><Icon name="trash" size={16}/></button>
+                                                        <button onClick={() => deleteItem('symposium_requests', item.id)} className="tap-icon text-red-400 shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -781,7 +948,7 @@
                                                         <p className={`text-sm font-bold mt-1 truncate ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{item.division} {item.team}] {item.name}({item.empId})</p>
                                                         <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap bg-slate-50 p-3 rounded-xl border break-words">{item.content}</p>
                                                     </div>
-                                                    <button onClick={() => deleteItem('inquiries', item.id)} className="text-red-400 shrink-0"><Icon name="trash" size={16}/></button>
+                                                    <button onClick={() => deleteItem('inquiries', item.id)} className="tap-icon text-red-400 shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                 </div>
                                             ))}
                                             {inquiries.length === 0 && <p className="py-10 text-center text-slate-400 italic font-bold">문의 내역이 없습니다.</p>}
@@ -803,7 +970,7 @@
                                                 setNewCategoryName("");
                                             }} className="flex gap-2 w-full">
                                                 <input className="flex-1 min-w-0 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="새 자료실 카테고리명" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} required />
-                                                <button type="submit" className="shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
+                                                <button type="submit" className="tap-icon shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95" aria-label="추가"><Icon name="plus" size={20} aria-hidden="true"/></button>
                                             </form>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
@@ -823,15 +990,15 @@
                                                         <div className="flex items-center gap-1 shrink-0">
                                                             {editingCategoryId === item.id ? (
                                                                 <>
-                                                                    <button onClick={() => handleUpdateCategory('categories', item, editingCategoryName)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg"><Icon name="checkCircle" size={16}/></button>
-                                                                    <button onClick={() => setEditingCategoryId(null)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg"><Icon name="close" size={16}/></button>
+                                                                    <button onClick={() => handleUpdateCategory('categories', item, editingCategoryName)} className="tap-icon p-2 text-green-600 hover:bg-green-50 rounded-lg" aria-label="완료 처리"><Icon name="checkCircle" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => setEditingCategoryId(null)} className="tap-icon p-2 text-slate-400 hover:bg-slate-50 rounded-lg" aria-label="닫기"><Icon name="close" size={16} aria-hidden="true"/></button>
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <button onClick={() => moveCategory(categoriesList, 'categories', index, -1)} disabled={index === 0} className={`p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowUp" size={16}/></button>
-                                                                    <button onClick={() => moveCategory(categoriesList, 'categories', index, 1)} disabled={index === categoriesList.length - 1} className={`p-2 rounded-lg transition-colors ${index === categoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowDown" size={16}/></button>
-                                                                    <button onClick={() => { setEditingCategoryId(item.id); setEditingCategoryName(item.name); }} className="p-2 text-slate-400 hover:text-blue-600 ml-1"><Icon name="edit" size={16}/></button>
-                                                                    <button onClick={() => window.confirm("삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'categories', item.id))} className="p-2 text-slate-300 hover:text-red-500 ml-1"><Icon name="trash" size={18}/></button>
+                                                                    <button onClick={() => moveCategory(categoriesList, 'categories', index, -1)} disabled={index === 0} className={`tap-icon p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`} aria-label="위로 이동"><Icon name="arrowUp" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => moveCategory(categoriesList, 'categories', index, 1)} disabled={index === categoriesList.length - 1} className={`tap-icon p-2 rounded-lg transition-colors ${index === categoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`} aria-label="아래로 이동"><Icon name="arrowDown" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => { setEditingCategoryId(item.id); setEditingCategoryName(item.name); }} className="tap-icon p-2 text-slate-400 hover:text-blue-600 ml-1" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={async () => { if (await askConfirm(`분류 "${item.name}"을(를) 삭제하시겠습니까?`)) { await window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'categories', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-slate-300 hover:text-red-500 ml-1" aria-label="삭제"><Icon name="trash" size={18} aria-hidden="true"/></button>
                                                                 </>
                                                             )}
                                                         </div>
@@ -856,7 +1023,7 @@
                                                 setNewVideoCategoryName("");
                                             }} className="flex gap-2 w-full">
                                                 <input className="flex-1 min-w-0 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="새 교육영상 카테고리명" value={newVideoCategoryName} onChange={e => setNewVideoCategoryName(e.target.value)} required />
-                                                <button type="submit" className="shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95"><Icon name="plus" size={20}/></button>
+                                                <button type="submit" className="tap-icon shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95" aria-label="추가"><Icon name="plus" size={20} aria-hidden="true"/></button>
                                             </form>
                                         </div>
                                         <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
@@ -876,15 +1043,15 @@
                                                         <div className="flex items-center gap-1 shrink-0">
                                                             {editingCategoryId === item.id ? (
                                                                 <>
-                                                                    <button onClick={() => handleUpdateCategory('videoCategories', item, editingCategoryName)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg"><Icon name="checkCircle" size={16}/></button>
-                                                                    <button onClick={() => setEditingCategoryId(null)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg"><Icon name="close" size={16}/></button>
+                                                                    <button onClick={() => handleUpdateCategory('videoCategories', item, editingCategoryName)} className="tap-icon p-2 text-green-600 hover:bg-green-50 rounded-lg" aria-label="완료 처리"><Icon name="checkCircle" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => setEditingCategoryId(null)} className="tap-icon p-2 text-slate-400 hover:bg-slate-50 rounded-lg" aria-label="닫기"><Icon name="close" size={16} aria-hidden="true"/></button>
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, -1)} disabled={index === 0} className={`p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowUp" size={16}/></button>
-                                                                    <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, 1)} disabled={index === videoCategoriesList.length - 1} className={`p-2 rounded-lg transition-colors ${index === videoCategoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icon name="arrowDown" size={16}/></button>
-                                                                    <button onClick={() => { setEditingCategoryId(item.id); setEditingCategoryName(item.name); }} className="p-2 text-slate-400 hover:text-blue-600 ml-1"><Icon name="edit" size={16}/></button>
-                                                                    <button onClick={() => window.confirm("삭제할까요?") && window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'videoCategories', item.id))} className="p-2 text-slate-300 hover:text-red-500 ml-1"><Icon name="trash" size={18}/></button>
+                                                                    <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, -1)} disabled={index === 0} className={`tap-icon p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`} aria-label="위로 이동"><Icon name="arrowUp" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, 1)} disabled={index === videoCategoriesList.length - 1} className={`tap-icon p-2 rounded-lg transition-colors ${index === videoCategoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`} aria-label="아래로 이동"><Icon name="arrowDown" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => { setEditingCategoryId(item.id); setEditingCategoryName(item.name); }} className="tap-icon p-2 text-slate-400 hover:text-blue-600 ml-1" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={async () => { if (await askConfirm(`분류 "${item.name}"을(를) 삭제하시겠습니까?`)) { await window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'videoCategories', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-slate-300 hover:text-red-500 ml-1" aria-label="삭제"><Icon name="trash" size={18} aria-hidden="true"/></button>
                                                                 </>
                                                             )}
                                                         </div>
@@ -911,7 +1078,7 @@
                                                     {formState.thumbnail && (
                                                         <div className="relative shrink-0">
                                                             <img src={formState.thumbnail} className="h-14 w-14 object-cover rounded-xl border shadow-sm" alt="thumbnail" />
-                                                            <button type="button" onClick={() => setFormState(p => ({...p, thumbnail: ""}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm"><Icon name="trash" size={12}/></button>
+                                                            <button type="button" onClick={() => setFormState(p => ({...p, thumbnail: ""}))} className="tap-icon absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm" aria-label="삭제"><Icon name="trash" size={12} aria-hidden="true"/></button>
                                                         </div>
                                                     )}
                                                 </div>
@@ -959,8 +1126,8 @@
                                                             <p className="font-black text-slate-800 text-xs line-clamp-1">{item.title}</p>
                                                         </div>
                                                         <div className="flex gap-1 shrink-0">
-                                                            <button onClick={() => { setEditingId(item.id); setFormState({title: item.title||"", category: item.category||"", description: item.description||"", pdfUrl: item.pdfUrl||"", pptUrl: item.pptUrl||"", youtubeUrl: item.youtubeUrl||"", thumbnail: item.thumbnail||""}); window.scrollTo(0,0); }} className="p-2 text-slate-400 hover:text-blue-600"><Icon name="edit" size={16}/></button>
-                                                            <button onClick={() => { if(window.confirm("삭제하시겠습니까?")) window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'messages', item.id)); }} className="p-2 text-slate-400 hover:text-red-500"><Icon name="trash" size={16}/></button>
+                                                            <button onClick={() => { setEditingId(item.id); setFormState({title: item.title||"", category: item.category||"", description: item.description||"", pdfUrl: item.pdfUrl||"", pptUrl: item.pptUrl||"", youtubeUrl: item.youtubeUrl||"", thumbnail: item.thumbnail||""}); window.scrollTo(0,0); }} className="tap-icon p-2 text-slate-400 hover:text-blue-600" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
+                                                            <button onClick={async () => { if (await askConfirm(`"${item.title}" 항목을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) { await window.FB.deleteDoc(window.FB.doc(window.FB.db, 'artifacts', window.FB.appId, 'public', 'data', 'messages', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-slate-400 hover:text-red-500" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -1108,7 +1275,7 @@
                                                         {local301List.map((acc, idx) => (
                                                             <li key={idx} className="p-3 text-left text-xs flex justify-between bg-white items-center">
                                                                 <span><b>{acc.accountName}</b> ({acc.targetProduct}) - {acc.rxAmount}원 / {acc.doctorCount}명 참석</span>
-                                                                <button onClick={()=>setLocal301List(local301List.filter((_,i)=>i!==idx))} className="text-red-500 p-1"><Icon name="trash" size={14}/></button>
+                                                                <button onClick={()=>setLocal301List(local301List.filter((_,i)=>i!==idx))} className="tap-icon text-red-500 p-1" aria-label="삭제"><Icon name="trash" size={14} aria-hidden="true"/></button>
                                                             </li>
                                                         ))}
                                                     </ul>
@@ -1289,13 +1456,53 @@
                         )}
                     </main>
 
+                    {/* ===== 토스트 (포커스를 뺏지 않음) ===== */}
+                    <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-[80] w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none"
+                         role="status" aria-live="polite" aria-atomic="false">
+                        {toasts.map(t => (
+                            <div key={t.id}
+                                 className={`toast-enter pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-md shadow-modal text-label font-medium ${
+                                     t.kind === 'error'   ? 'bg-danger text-white'   :
+                                     t.kind === 'success' ? 'bg-success text-white'  :
+                                                            'bg-slate-800 text-white'}`}>
+                                <Icon name={t.kind === 'error' ? 'close' : t.kind === 'success' ? 'checkCircle' : 'helpCircle'}
+                                      size={18} className="shrink-0 mt-0.5" aria-hidden="true" />
+                                <span className="flex-1 text-left leading-relaxed">{t.message}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* ===== 확인 모달 (window.confirm 대체) ===== */}
+                    {confirmState && (
+                        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+                             role="dialog" aria-modal="true" aria-labelledby="confirm-msg"
+                             onClick={e => { if (e.target === e.currentTarget) closeConfirm(false); }}>
+                            <div className="bg-surface w-full max-w-sm rounded-lg p-6 shadow-modal">
+                                <div className={`w-12 h-12 rounded-md flex items-center justify-center mb-4 ${confirmState.danger ? 'bg-danger-soft text-danger' : 'bg-primary-soft text-primary'}`}>
+                                    <Icon name={confirmState.danger ? 'trash' : 'helpCircle'} size={24} aria-hidden="true" />
+                                </div>
+                                <p id="confirm-msg" className="text-body font-medium text-fg text-left mb-6">{confirmState.message}</p>
+                                <div className="flex gap-2">
+                                    <button autoFocus onClick={() => closeConfirm(false)}
+                                            className="flex-1 tap bg-surface-2 text-fg-muted font-bold rounded-md text-label hover:bg-line transition-colors">
+                                        취소
+                                    </button>
+                                    <button onClick={() => closeConfirm(true)}
+                                            className={`flex-1 tap font-bold rounded-md text-label text-white transition-colors ${confirmState.danger ? 'bg-danger hover:opacity-90' : 'bg-primary hover:bg-primary-hover'}`}>
+                                        {confirmState.confirmLabel}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Admin Auth Modal (비밀번호 힌트 제거) */}
                     {showAdminLogin && (
                         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 text-center">
                             <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-200 text-center">
                                 <div className="flex justify-between items-center mb-6">
                                     <h2 className="text-xl font-bold flex items-center gap-2"><Icon name="lock" size={24} className="text-blue-600" /> PM 관리자 인증</h2>
-                                    <button onClick={() => setShowAdminLogin(false)} className="text-slate-400 hover:text-slate-600"><Icon name="close" size={24} /></button>
+                                    <button onClick={() => setShowAdminLogin(false)} className="tap-icon text-slate-400 hover:text-slate-600" aria-label="닫기"><Icon name="close" size={24}  aria-hidden="true"/></button>
                                 </div>
                                 <form onSubmit={(e) => {
                                     e.preventDefault();
@@ -1305,7 +1512,7 @@
                                         setAdminPasswordInput(""); 
                                         setActiveTab("home"); 
                                     }
-                                    else alert("관리자 비밀번호가 일치하지 않습니다.");
+                                    else toast("관리자 비밀번호가 일치하지 않습니다.", "error");
                                 }} className="space-y-4 text-center">
                                     <p className="text-xs text-slate-500 font-bold mb-4">관리자 전용 비밀번호를 입력하세요.</p>
                                     <input type="password" autoFocus className="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-center text-xl tracking-widest" placeholder="비밀번호 입력" value={adminPasswordInput} onChange={e => setAdminPasswordInput(e.target.value)} />

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MR HUB 데이터 백업</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ── Primitive ── */
+  :root{
+    --slate-50:#F8FAFC; --slate-100:#F1F5F9; --slate-200:#E2E8F0;
+    --slate-500:#64748B; --slate-600:#475569; --slate-800:#1E293B; --slate-900:#0F172A;
+    --blue-50:#EFF6FF; --blue-600:#2563EB; --blue-700:#1D4ED8;
+    --green-50:#F0FDF4; --green-600:#16A34A; --green-700:#15803D;
+    --red-50:#FEF2F2; --red-600:#DC2626;
+    --amber-50:#FFFBEB; --amber-700:#B45309;
+    --space-2:8px; --space-3:12px; --space-4:16px; --space-6:24px; --space-8:32px;
+    --radius-sm:8px; --radius-md:12px; --radius-lg:16px;
+  }
+  /* ── Semantic ── */
+  :root{
+    --color-bg:var(--slate-50); --color-surface:#FFFFFF;
+    --color-fg:var(--slate-800); --color-fg-muted:var(--slate-600);
+    --color-border:var(--slate-200);
+    --color-primary:var(--blue-600); --color-primary-hover:var(--blue-700);
+    --color-on-primary:#FFFFFF; --color-primary-soft:var(--blue-50);
+    --color-success:var(--green-600); --color-danger:var(--red-600);
+    --elev-card:0 1px 2px rgba(15,23,42,.06);
+    --touch-min:44px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Noto Sans KR',system-ui,sans-serif;
+    background:var(--color-bg); color:var(--color-fg);
+    line-height:1.6; padding:var(--space-4);
+  }
+  .wrap{max-width:720px;margin:0 auto;padding-block:var(--space-8)}
+  h1{font-size:24px;font-weight:700;line-height:1.3;margin-bottom:var(--space-2)}
+  .lede{color:var(--color-fg-muted);font-size:14px;margin-bottom:var(--space-6)}
+  .card{
+    background:var(--color-surface); border:1px solid var(--color-border);
+    border-radius:var(--radius-lg); padding:var(--space-6);
+    box-shadow:var(--elev-card); margin-bottom:var(--space-4);
+  }
+  .card h2{font-size:18px;font-weight:700;margin-bottom:var(--space-4)}
+  label{display:block;font-size:14px;font-weight:500;margin-bottom:var(--space-2)}
+  select,input[type=text]{
+    width:100%; min-height:var(--touch-min); padding:0 var(--space-3);
+    font-family:inherit; font-size:16px;
+    border:1px solid var(--color-border); border-radius:var(--radius-md);
+    background:var(--color-surface); color:var(--color-fg);
+  }
+  .hint{font-size:12px;color:var(--color-fg-muted);margin-top:var(--space-2)}
+  button{
+    font-family:inherit; font-size:16px; font-weight:700; cursor:pointer;
+    min-height:48px; padding:0 var(--space-6);
+    border:none; border-radius:var(--radius-md);
+    background:var(--color-primary); color:var(--color-on-primary);
+    transition:background .2s ease;
+  }
+  button:hover:not(:disabled){background:var(--color-primary-hover)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.wide{width:100%;margin-top:var(--space-4)}
+  button.secondary{background:var(--color-primary-soft);color:var(--color-primary)}
+  :focus-visible{outline:3px solid var(--color-primary);outline-offset:2px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:var(--space-3) var(--space-2);border-bottom:1px solid var(--color-border)}
+  th{font-weight:500;color:var(--color-fg-muted);font-size:12px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+  tr.total td{border-bottom:none;border-top:2px solid var(--color-border);padding-top:var(--space-4)}
+  .status{
+    display:flex;align-items:flex-start;gap:var(--space-3);
+    padding:var(--space-4);border-radius:var(--radius-md);
+    font-size:14px;margin-bottom:var(--space-4);
+  }
+  .status.info{background:var(--blue-50);color:#1E40AF}
+  .status.ok{background:var(--green-50);color:var(--green-700)}
+  .status.warn{background:var(--amber-50);color:var(--amber-700)}
+  .status.err{background:var(--red-50);color:var(--color-danger)}
+  .status svg{flex-shrink:0;margin-top:2px}
+  .ro{
+    display:inline-flex;align-items:center;gap:6px;
+    background:var(--green-50);color:var(--green-700);
+    font-size:12px;font-weight:700;padding:6px 12px;border-radius:999px;
+    margin-bottom:var(--space-4);
+  }
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="ro">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    읽기 전용 · 데이터를 수정하거나 삭제하지 않습니다
+  </span>
+
+  <h1>MR HUB 데이터 백업</h1>
+  <p class="lede">Firestore에 저장된 자료·영상·신청내역·사진을 JSON 파일 하나로 내려받습니다. 원본은 그대로 남습니다.</p>
+
+  <div class="card">
+    <h2>1. 백업 대상 선택</h2>
+    <label for="appId">사업부 데이터 공간</label>
+    <select id="appId">
+      <option value="dm-team-mr-hub-v3" selected>DM팀 (dm-team-mr-hub-v3) — 현재 운영 중</option>
+      <option value="__custom__">직접 입력…</option>
+    </select>
+    <input type="text" id="appIdCustom" class="hidden" placeholder="appId 직접 입력" style="margin-top:8px">
+    <p class="hint">기본값이 현재 운영 중인 데이터입니다. 그대로 두고 진행하세요.</p>
+    <button id="run" class="wide">데이터 읽어오기</button>
+  </div>
+
+  <div id="statusBox"></div>
+
+  <div class="card hidden" id="resultCard">
+    <h2>2. 읽어온 내용 확인</h2>
+    <table>
+      <thead><tr><th>항목</th><th style="text-align:right">건수</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <button id="download" class="wide">JSON 파일로 저장</button>
+    <button id="rerun" class="wide secondary">다시 읽기</button>
+    <p class="hint">저장한 파일은 이 프로젝트 폴더 <strong>바깥</strong>(예: 바탕화면, 클라우드 드라이브)에 보관하세요.</p>
+  </div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB475AzDr96EP6I7YsyZx3OjnYDMuMaq7k",
+  authDomain: "diabetes-sales.firebaseapp.com",
+  projectId: "diabetes-sales",
+  storageBucket: "diabetes-sales.firebasestorage.app",
+  messagingSenderId: "778615949732",
+  appId: "1:778615949732:web:8783bfcb0a95ec15cbd931"
+};
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+// 백업 대상 — index.html이 쓰는 컬렉션 전체
+const COLLECTIONS = [
+  ['messages',            '자료실 자료 + 교육영상'],
+  ['categories',          '자료 분류'],
+  ['videoCategories',     '영상 분류'],
+  ['symposium_list',      '심포지엄 목록'],
+  ['brochure_photos',     '현장 인증사진'],
+  ['requests',            '브로슈어 신청'],
+  ['requests_301',        '301 설명회 신청'],
+  ['symposium_requests',  '심포지엄 신청'],
+  ['inquiries',           '문의/건의'],
+  ['logs',                '활동 로그'],
+  ['settings',            '설정(MR 암호 등)']
+];
+
+const $ = id => document.getElementById(id);
+let payload = null;
+
+const ICONS = {
+  info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+  ok:   '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  warn: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  err:  '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'
+};
+
+function setStatus(kind, html) {
+  $('statusBox').innerHTML =
+    `<div class="status ${kind}" role="status" aria-live="polite">
+       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[kind]}</svg>
+       <div>${html}</div>
+     </div>`;
+}
+
+$('appId').addEventListener('change', e => {
+  const custom = e.target.value === '__custom__';
+  $('appIdCustom').classList.toggle('hidden', !custom);
+  if (custom) $('appIdCustom').focus();
+});
+
+function currentAppId() {
+  const v = $('appId').value;
+  return v === '__custom__' ? $('appIdCustom').value.trim() : v;
+}
+
+async function run() {
+  const appId = currentAppId();
+  if (!appId) { setStatus('err', 'appId를 입력하세요.'); return; }
+
+  $('run').disabled = true;
+  $('rerun').disabled = true;
+  $('resultCard').classList.add('hidden');
+  setStatus('info', '연결하는 중…');
+
+  try {
+    await signInAnonymously(auth);
+  } catch (e) {
+    setStatus('err',
+      `<strong>인증 실패</strong><br>${e.code || e.message}<br><br>
+       이 파일을 <code>file://</code>로 열면 Firebase가 차단할 수 있습니다.
+       GitHub에 업로드한 뒤 <code>index.html</code>과 같은 주소에서 열어주세요.`);
+    $('run').disabled = false; $('rerun').disabled = false;
+    return;
+  }
+
+  const data = {};
+  const counts = [];
+  let failed = 0;
+
+  for (const [name, label] of COLLECTIONS) {
+    setStatus('info', `읽는 중… <strong>${label}</strong>`);
+    try {
+      const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', name));
+      data[name] = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+      counts.push([label, name, data[name].length, true]);
+    } catch (e) {
+      console.error(name, e);
+      data[name] = [];
+      counts.push([label, name, '읽기 실패', false]);
+      failed++;
+    }
+  }
+
+  // messages를 자료/영상으로 분해해 눈으로 확인 가능하게
+  const msgs   = data.messages || [];
+  const videos = msgs.filter(m => m.isVideo || m.youtubeUrl).length;
+  const broch  = msgs.filter(m => m.category === '제품 브로슈어').length;
+  const docs   = msgs.length - videos - broch;
+
+  payload = {
+    _meta: {
+      backedUpAt: new Date().toISOString(),
+      appId,
+      source: 'backup.html',
+      totals: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.length]))
+    },
+    ...data
+  };
+
+  $('rows').innerHTML =
+    counts.map(([label, name, n, ok]) => {
+      const extra = name === 'messages' && ok
+        ? `<div class="hint">└ 자료 ${docs}건 · 영상 ${videos}건 · 브로슈어 ${broch}건</div>` : '';
+      return `<tr>
+        <td>${label}<div class="hint">${name}</div>${extra}</td>
+        <td class="num" style="${ok ? '' : 'color:var(--color-danger)'}">${n}</td>
+      </tr>`;
+    }).join('') +
+    `<tr class="total"><td><strong>전체 문서</strong></td>
+     <td class="num">${Object.values(data).reduce((s, a) => s + a.length, 0)}</td></tr>`;
+
+  $('resultCard').classList.remove('hidden');
+  $('run').disabled = false;
+  $('rerun').disabled = false;
+
+  if (failed) {
+    setStatus('warn', `<strong>${failed}개 항목을 읽지 못했습니다.</strong><br>
+      권한 문제일 수 있습니다. 표에서 어떤 항목인지 확인하세요. 나머지는 정상적으로 담겼습니다.`);
+  } else {
+    setStatus('ok', `<strong>읽기 완료.</strong> 원본 데이터는 그대로입니다.<br>
+      건수를 확인한 뒤 아래 버튼으로 저장하세요.`);
+  }
+}
+
+function download() {
+  if (!payload) return;
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mrhub-backup-${payload._meta.appId}-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setStatus('ok', '<strong>저장했습니다.</strong> 이 프로젝트 폴더 바깥에 보관하세요.');
+}
+
+$('run').addEventListener('click', run);
+$('rerun').addEventListener('click', run);
+$('download').addEventListener('click', download);
+</script>
+</body>
+</html>
