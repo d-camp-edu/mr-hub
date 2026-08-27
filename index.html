@@ -585,7 +585,8 @@
                 adminPassword: "0000",   // 최초 1회용. 설정 화면에서 바꾸면 Firestore에만 저장됨
                 divisions: [
                     { id: "dm",   label: "DM팀",     sublabel: "당뇨사업부", logo: "", dataAppId: DEFAULT_APP_ID },
-                    { id: "onco", label: "항암사업부", sublabel: "",          logo: "", dataAppId: "onco-mr-hub-v1" }
+                    // 항암사업부는 이미 운영 중인 공간(자료 11건·분류 10종). 이 값을 바꾸면 기존 자료가 보이지 않는다.
+                    { id: "onco", label: "항암사업부", sublabel: "",          logo: "", dataAppId: "onco-team-mr-hub-v3" }
                 ]
             };
             const [brand, setBrand] = useState(DEFAULT_BRAND);
