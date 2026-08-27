@@ -80,13 +80,16 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = "dm-team-mr-hub-v3"; 
+        // DM팀 기존 데이터 공간. 이 값을 바꾸면 기존 자료가 보이지 않는다.
+        const appId = "dm-team-mr-hub-v3";
+        // 브랜드 설정(로고/색상/사업부 목록)만 담는 전역 공간. 사업부와 무관.
+        const ROOT_ID = "mr-hub-root";
 
         // React에서 사용할 수 있도록 전역 창구 열기
-        window.FB = { 
-            db, auth, appId, 
+        window.FB = {
+            db, auth, appId, ROOT_ID,
             collection, addDoc, doc, setDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit,
-            signInAnonymously, onAuthStateChanged 
+            signInAnonymously, onAuthStateChanged
         };
     </script>
 
@@ -267,6 +270,90 @@
             reader.readAsDataURL(file);
         };
 
+        // ═══════════ 로고 전용 압축 ═══════════
+        // compressImage는 JPEG로 고정되어 있어 PNG 투명 배경이 검게 뭉갠다.
+        // 로고는 알파 채널을 반드시 보존해야 하므로 PNG로 내보낸다.
+        const LOGO_MAX_BYTES = 200 * 1024;
+        const compressLogo = (file, onDone, onError) => {
+            const reader = new FileReader();
+            reader.onerror = () => onError && onError("파일을 읽지 못했습니다.");
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onerror = () => onError && onError("이미지 형식을 인식하지 못했습니다.");
+                img.onload = () => {
+                    const MAX = 400;
+                    let w = img.width, h = img.height;
+                    if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+                    if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    // 배경을 칠하지 않음 → 투명 영역 그대로 유지
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    const out = canvas.toDataURL('image/png');
+                    // base64는 원본 대비 약 4/3 크기
+                    const bytes = Math.round(out.length * 3 / 4);
+                    if (bytes > LOGO_MAX_BYTES) {
+                        onError && onError(`로고 용량이 ${Math.round(bytes/1024)}KB로 너무 큽니다. 200KB 이하 이미지를 사용해주세요.`);
+                        return;
+                    }
+                    onDone(out, bytes);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // ═══════════ 포인트 컬러 파생 ═══════════
+        // 관리자가 어떤 색을 넣어도 버튼 글씨가 읽히도록 대비를 계산해 결정한다.
+        const hexToRgb = (hex) => {
+            const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec((hex || "").trim());
+            return m ? { r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) } : null;
+        };
+        const rgbToHsl = ({r,g,b}) => {
+            r/=255; g/=255; b/=255;
+            const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+            let h=0; const l=(max+min)/2;
+            const s = d===0 ? 0 : d/(1-Math.abs(2*l-1));
+            if (d!==0) {
+                if (max===r) h=((g-b)/d)%6;
+                else if (max===g) h=(b-r)/d+2;
+                else h=(r-g)/d+4;
+                h*=60; if (h<0) h+=360;
+            }
+            return { h, s, l };
+        };
+        const hslToHex = ({h,s,l}) => {
+            s=Math.min(1,Math.max(0,s)); l=Math.min(1,Math.max(0,l));
+            const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2;
+            let [r,g,b] = h<60?[c,x,0]:h<120?[x,c,0]:h<180?[0,c,x]:h<240?[0,x,c]:h<300?[x,0,c]:[c,0,x];
+            const to = v => Math.round((v+m)*255).toString(16).padStart(2,'0');
+            return `#${to(r)}${to(g)}${to(b)}`;
+        };
+        const relLuminance = ({r,g,b}) => {
+            const f = v => { v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); };
+            return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b);
+        };
+        const contrastRatio = (hexA, hexB) => {
+            const a = hexToRgb(hexA), b = hexToRgb(hexB);
+            if (!a || !b) return 0;
+            const la = relLuminance(a), lb = relLuminance(b);
+            return (Math.max(la,lb) + 0.05) / (Math.min(la,lb) + 0.05);
+        };
+        const DEFAULT_POINT = "#2563EB";
+        const deriveTheme = (hex) => {
+            const rgb = hexToRgb(hex);
+            if (!rgb) return deriveTheme(DEFAULT_POINT);
+            const hsl = rgbToHsl(rgb);
+            const primary = hslToHex(hsl);
+            const hover   = hslToHex({ ...hsl, l: Math.max(0.08, hsl.l - 0.08) });
+            const soft    = hslToHex({ h: hsl.h, s: hsl.s * 0.35, l: 0.95 });
+            // 흰 글씨와 짙은 글씨 중 대비가 높은 쪽을 자동 선택
+            const onWhite = contrastRatio(primary, "#FFFFFF");
+            const onDark  = contrastRatio(primary, "#0F172A");
+            const onPrimary = onWhite >= onDark ? "#FFFFFF" : "#0F172A";
+            return { primary, hover, soft, onPrimary, contrast: Math.max(onWhite, onDark) };
+        };
+
         const App = () => {
             const [user, setUser] = useState(null);
             
@@ -328,6 +415,58 @@
             const [activeAppId, setActiveAppId] = useState(
                 sessionStorage.getItem('mr_app_id') || DEFAULT_APP_ID
             );
+            // 선택된 사업부 id. 없으면 사업부 선택 화면부터 시작.
+            const [divisionId, setDivisionId] = useState(sessionStorage.getItem('mr_div_id') || "");
+
+            // ===== 브랜드 설정 (전역: 사업부 선택 전 화면에서 쓰이므로 사업부와 무관) =====
+            const DEFAULT_BRAND = {
+                companyLogo: "",
+                companyName: "종근당",
+                appTitle: "MR HUB",
+                pointColor: DEFAULT_POINT,
+                adminPassword: "0000",   // 최초 1회용. 설정 화면에서 바꾸면 Firestore에만 저장됨
+                divisions: [
+                    { id: "dm",   label: "DM팀",     sublabel: "당뇨사업부", logo: "", dataAppId: DEFAULT_APP_ID },
+                    { id: "onco", label: "항암사업부", sublabel: "",          logo: "", dataAppId: "onco-mr-hub-v1" }
+                ]
+            };
+            const [brand, setBrand] = useState(DEFAULT_BRAND);
+
+            const brandRef = useCallback(
+                () => window.FB.doc(window.FB.db, 'artifacts', window.FB.ROOT_ID, 'public', 'data', 'settings', 'brand'),
+                []
+            );
+
+            // 브랜드 설정 화면 상태
+            const [brandAuthOpen, setBrandAuthOpen]   = useState(false);
+            const [brandAuthInput, setBrandAuthInput] = useState("");
+            const [brandEditorOpen, setBrandEditorOpen] = useState(false);
+            const [brandDraft, setBrandDraft] = useState(null);
+            const [brandSaving, setBrandSaving] = useState(false);
+
+            // 브랜드 문서 구독 — activeAppId와 독립
+            useEffect(() => {
+                if (!user || !window.FB) return;
+                return window.FB.onSnapshot(brandRef(), (snap) => {
+                    if (!snap.exists()) return;   // 없으면 기본값 유지 (덮어쓰지 않음)
+                    const d = snap.data() || {};
+                    setBrand(prev => ({
+                        ...prev,
+                        ...d,
+                        divisions: Array.isArray(d.divisions) && d.divisions.length ? d.divisions : prev.divisions
+                    }));
+                }, (e) => console.error("브랜드 설정 구독 오류:", e));
+            }, [user, brandRef]);
+
+            // 포인트 컬러를 CSS 변수에 반영 (토큰을 쓰는 모든 화면에 즉시 전파)
+            const theme = useMemo(() => deriveTheme(brand.pointColor), [brand.pointColor]);
+            useEffect(() => {
+                const r = document.documentElement.style;
+                r.setProperty('--color-primary',       theme.primary);
+                r.setProperty('--color-primary-hover', theme.hover);
+                r.setProperty('--color-primary-soft',  theme.soft);
+                r.setProperty('--color-on-primary',    theme.onPrimary);
+            }, [theme]);
 
             // 모든 Firestore 경로는 이 두 헬퍼만 거친다 (경로 오타로 데이터가 안 보이는 사고 방지)
             const colRef = useCallback(
@@ -698,19 +837,445 @@
                 return symposiumList.find(s => s.name === sympForm.symposiumName);
             }, [symposiumList, sympForm.symposiumName]);
 
+            // ===== 사업부 선택 =====
+            const currentDivision = useMemo(
+                () => brand.divisions.find(d => d.id === divisionId) || null,
+                [brand.divisions, divisionId]
+            );
+
+            const selectDivision = (d) => {
+                setDivisionId(d.id);
+                setActiveAppId(d.dataAppId);
+                sessionStorage.setItem('mr_div_id', d.id);
+                sessionStorage.setItem('mr_app_id', d.dataAppId);
+            };
+
+            const clearDivision = () => {
+                setDivisionId("");
+                sessionStorage.removeItem('mr_div_id');
+                sessionStorage.removeItem('mr_app_id');
+                setLoginEmpId(""); setLoginPassword("");
+            };
+
+            // 브랜드 문서가 늦게 도착해도 선택된 사업부의 데이터 공간을 따라가도록 보정
+            useEffect(() => {
+                if (currentDivision && currentDivision.dataAppId !== activeAppId) {
+                    setActiveAppId(currentDivision.dataAppId);
+                    sessionStorage.setItem('mr_app_id', currentDivision.dataAppId);
+                }
+            }, [currentDivision, activeAppId]);
+
+            // ===== 브랜드 설정 핸들러 =====
+            const openBrandEditor = () => {
+                setBrandDraft(JSON.parse(JSON.stringify(brand)));
+                setBrandEditorOpen(true);
+                setBrandAuthOpen(false);
+                setBrandAuthInput("");
+            };
+
+            const brandLogoUpload = (e, apply) => {
+                const file = e.target.files && e.target.files[0];
+                e.target.value = "";           // 같은 파일 재선택 가능하도록
+                if (!file) return;
+                compressLogo(file, (base64) => { apply(base64); toast("로고를 불러왔습니다. 저장을 눌러야 반영됩니다."); },
+                                   (msg) => toast(msg, "error"));
+            };
+
+            const updateDivision = (idx, patch) => {
+                setBrandDraft(d => ({
+                    ...d,
+                    divisions: d.divisions.map((v, i) => i === idx ? { ...v, ...patch } : v)
+                }));
+            };
+
+            const addDivision = () => {
+                setBrandDraft(d => ({
+                    ...d,
+                    divisions: [...d.divisions, {
+                        id: "div" + Date.now().toString(36),
+                        label: "", sublabel: "", logo: "",
+                        dataAppId: "mr-hub-" + Date.now().toString(36)
+                    }]
+                }));
+            };
+
+            const removeDivision = async (idx) => {
+                const d = brandDraft.divisions[idx];
+                const ok = await askConfirm(
+                    `"${d.label || '이름 없음'}"을(를) 목록에서 제거하시겠습니까?\n\n` +
+                    `이 사업부에 등록된 자료·신청 데이터는 삭제되지 않고 그대로 남습니다. ` +
+                    `다시 추가하면 되살아납니다.`,
+                    { confirmLabel: "목록에서 제거" }
+                );
+                if (!ok) return;
+                setBrandDraft(s => ({ ...s, divisions: s.divisions.filter((_, i) => i !== idx) }));
+            };
+
+            const saveBrand = async () => {
+                if (!window.FB || !brandDraft) return;
+                const clean = {
+                    ...brandDraft,
+                    divisions: brandDraft.divisions.filter(d => (d.label || "").trim())
+                };
+                if (!clean.divisions.length) { toast("사업부를 최소 1개는 남겨주세요.", "error"); return; }
+                if (clean.divisions.some(d => !d.dataAppId)) { toast("사업부 데이터 공간 값이 비어 있습니다.", "error"); return; }
+                setBrandSaving(true);
+                try {
+                    await window.FB.setDoc(brandRef(), clean, { merge: true });
+                    setBrand(clean);
+                    toast("브랜드 설정을 저장했습니다.", "success");
+                    setBrandEditorOpen(false);
+                } catch (e) {
+                    console.error(e);
+                    toast("저장 중 오류가 발생했습니다.", "error");
+                } finally {
+                    setBrandSaving(false);
+                }
+            };
+
             // ===== 화면 렌더링 =====
-            if (!isLoggedIn) {
+
+            // 브랜드 설정 화면 (로그인 전 첫페이지에서 진입)
+            if (brandEditorOpen && brandDraft) {
+                const draftTheme = deriveTheme(brandDraft.pointColor);
+                const PRESETS = ["#2563EB", "#0E7490", "#15803D", "#B91C1C", "#7C3AED", "#0F172A"];
                 return (
-                    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-6 text-center">
-                        <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl">
-                            <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner"><Icon name="user" size={40} /></div>
-                            <h1 className="text-2xl font-black text-slate-800 tracking-tight">DM TEAM MR HUB</h1>
-                            <p className="text-slate-400 text-xs mt-2 mb-8 font-bold uppercase tracking-widest text-blue-500">MR 전용 보안 인증</p>
+                    <div className="min-h-screen bg-bg">
+                        <header className="sticky top-0 z-40 bg-surface border-b border-line px-4 py-3 flex items-center justify-between">
+                            <h1 className="text-title font-bold text-fg">브랜드 설정</h1>
+                            <button onClick={() => setBrandEditorOpen(false)}
+                                    className="tap px-4 rounded-md text-label font-bold text-fg-muted bg-surface-2 hover:bg-line transition-colors">
+                                닫기
+                            </button>
+                        </header>
+
+                        <main className="max-w-2xl mx-auto p-4 space-y-4 pb-32">
+
+                            {/* 회사 */}
+                            <section className="bg-surface rounded-lg border border-line p-5 shadow-card">
+                                <h2 className="text-label font-bold text-fg-muted mb-4">회사</h2>
+
+                                <label className="block text-label font-medium text-fg mb-2">로고</label>
+                                <div className="flex items-center gap-3 mb-5">
+                                    <div className="w-20 h-20 rounded-md border border-line bg-surface-2 flex items-center justify-center overflow-hidden shrink-0">
+                                        {brandDraft.companyLogo
+                                            ? <img src={brandDraft.companyLogo} alt="회사 로고 미리보기" className="max-w-full max-h-full object-contain" />
+                                            : <Icon name="image" size={24} className="text-fg-subtle" aria-hidden="true" />}
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="tap inline-flex items-center gap-2 px-4 rounded-md bg-primary-soft text-primary text-label font-bold cursor-pointer hover:opacity-90">
+                                            <Icon name="image" size={16} aria-hidden="true" /> 이미지 선택
+                                            <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden"
+                                                   onChange={e => brandLogoUpload(e, v => setBrandDraft(d => ({...d, companyLogo: v})))} />
+                                        </label>
+                                        {brandDraft.companyLogo && (
+                                            <button onClick={() => setBrandDraft(d => ({...d, companyLogo: ""}))}
+                                                    className="tap px-4 rounded-md text-label font-bold text-danger bg-danger-soft hover:opacity-90">
+                                                제거
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                <p className="text-caption text-fg-muted mb-5">PNG 투명 배경 그대로 유지됩니다. 200KB 이하, 가로 400px로 자동 축소.</p>
+
+                                <label htmlFor="bd-company" className="block text-label font-medium text-fg mb-2">회사명</label>
+                                <input id="bd-company" value={brandDraft.companyName}
+                                       onChange={e => setBrandDraft(d => ({...d, companyName: e.target.value}))}
+                                       className="w-full px-4 rounded-md border border-line bg-surface text-fg mb-4"
+                                       style={{ minHeight: 'var(--input-h)' }} />
+
+                                <label htmlFor="bd-title" className="block text-label font-medium text-fg mb-2">앱 이름</label>
+                                <input id="bd-title" value={brandDraft.appTitle}
+                                       onChange={e => setBrandDraft(d => ({...d, appTitle: e.target.value}))}
+                                       className="w-full px-4 rounded-md border border-line bg-surface text-fg"
+                                       style={{ minHeight: 'var(--input-h)' }} />
+                            </section>
+
+                            {/* 포인트 컬러 */}
+                            <section className="bg-surface rounded-lg border border-line p-5 shadow-card">
+                                <h2 className="text-label font-bold text-fg-muted mb-4">포인트 컬러</h2>
+                                <div className="flex items-center gap-3 mb-4">
+                                    <input type="color" aria-label="포인트 컬러 선택"
+                                           value={draftTheme.primary}
+                                           onChange={e => setBrandDraft(d => ({...d, pointColor: e.target.value}))}
+                                           className="w-14 h-14 rounded-md border border-line cursor-pointer bg-surface p-1" />
+                                    <input aria-label="포인트 컬러 색상 코드"
+                                           value={brandDraft.pointColor}
+                                           onChange={e => setBrandDraft(d => ({...d, pointColor: e.target.value}))}
+                                           className="flex-1 px-4 rounded-md border border-line bg-surface text-fg font-mono"
+                                           style={{ minHeight: 'var(--input-h)' }} />
+                                </div>
+                                <div className="flex flex-wrap gap-2 mb-5">
+                                    {PRESETS.map(c => (
+                                        <button key={c} onClick={() => setBrandDraft(d => ({...d, pointColor: c}))}
+                                                aria-label={`색상 ${c} 선택`}
+                                                className="tap-icon rounded-md border-2"
+                                                style={{ background: c, borderColor: brandDraft.pointColor.toLowerCase() === c.toLowerCase() ? 'var(--color-fg)' : 'transparent' }} />
+                                    ))}
+                                </div>
+
+                                {/* 미리보기 + 실시간 대비 검사 */}
+                                <div className="rounded-md border border-line p-4 bg-surface-2">
+                                    <p className="text-caption font-bold text-fg-muted mb-3">미리보기</p>
+                                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                                        <span className="tap inline-flex items-center px-5 rounded-md font-bold text-label"
+                                              style={{ background: draftTheme.primary, color: draftTheme.onPrimary }}>입장하기</span>
+                                        <span className="tap inline-flex items-center px-4 rounded-md font-bold text-label"
+                                              style={{ background: draftTheme.soft, color: draftTheme.primary }}>활성 탭</span>
+                                    </div>
+                                    <p className={`text-caption font-bold flex items-center gap-2 ${draftTheme.contrast >= 4.5 ? 'text-success' : 'text-danger'}`}>
+                                        <Icon name={draftTheme.contrast >= 4.5 ? 'checkCircle' : 'helpCircle'} size={14} aria-hidden="true" />
+                                        버튼 글씨 대비 {draftTheme.contrast.toFixed(1)}:1 —
+                                        {draftTheme.contrast >= 4.5 ? ' 읽기 좋습니다' : ' 기준(4.5:1) 미달, 더 진한 색을 권합니다'}
+                                    </p>
+                                </div>
+                            </section>
+
+                            {/* 사업부 */}
+                            <section className="bg-surface rounded-lg border border-line p-5 shadow-card">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-label font-bold text-fg-muted">사업부</h2>
+                                    <button onClick={addDivision}
+                                            className="tap inline-flex items-center gap-1 px-4 rounded-md bg-primary-soft text-primary text-label font-bold hover:opacity-90">
+                                        <Icon name="plus" size={16} aria-hidden="true" /> 추가
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {brandDraft.divisions.map((d, i) => (
+                                        <div key={d.id || i} className="rounded-md border border-line p-4 bg-surface-2">
+                                            <div className="flex items-start gap-3">
+                                                <label className="w-16 h-16 shrink-0 rounded-md border border-line bg-surface flex items-center justify-center overflow-hidden cursor-pointer hover:border-primary transition-colors"
+                                                       title="로고 선택">
+                                                    {d.logo
+                                                        ? <img src={d.logo} alt={`${d.label} 로고`} className="max-w-full max-h-full object-contain" />
+                                                        : <Icon name="image" size={20} className="text-fg-subtle" aria-hidden="true" />}
+                                                    <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden"
+                                                           onChange={e => brandLogoUpload(e, v => updateDivision(i, { logo: v }))} />
+                                                </label>
+
+                                                <div className="flex-1 min-w-0 space-y-2">
+                                                    <input aria-label={`사업부 ${i+1} 이름`} placeholder="이름 (예: 항암사업부)"
+                                                           value={d.label}
+                                                           onChange={e => updateDivision(i, { label: e.target.value })}
+                                                           className="w-full px-3 rounded-sm border border-line bg-surface text-fg font-bold"
+                                                           style={{ minHeight: '44px' }} />
+                                                    <input aria-label={`사업부 ${i+1} 부제`} placeholder="부제 (선택)"
+                                                           value={d.sublabel || ""}
+                                                           onChange={e => updateDivision(i, { sublabel: e.target.value })}
+                                                           className="w-full px-3 rounded-sm border border-line bg-surface text-fg"
+                                                           style={{ minHeight: '44px' }} />
+                                                </div>
+
+                                                <button onClick={() => removeDivision(i)} aria-label={`${d.label || '사업부'} 제거`}
+                                                        className="tap-icon rounded-md text-fg-subtle hover:text-danger hover:bg-danger-soft transition-colors shrink-0">
+                                                    <Icon name="trash" size={18} aria-hidden="true" />
+                                                </button>
+                                            </div>
+
+                                            <p className="text-caption text-fg-muted mt-3 font-mono break-all">
+                                                데이터 공간: {d.dataAppId}
+                                                {d.dataAppId === DEFAULT_APP_ID && <span className="ml-2 font-sans font-bold text-success">← 기존 DM팀 데이터</span>}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-caption text-fg-muted mt-4">
+                                    목록에서 제거해도 해당 사업부의 자료·신청 데이터는 삭제되지 않습니다.
+                                </p>
+                            </section>
+
+                            {/* 관리자 비밀번호 */}
+                            <section className="bg-surface rounded-lg border border-line p-5 shadow-card">
+                                <h2 className="text-label font-bold text-fg-muted mb-4">브랜드 설정 비밀번호</h2>
+                                <label htmlFor="bd-pw" className="block text-label font-medium text-fg mb-2">새 비밀번호</label>
+                                <input id="bd-pw" type="text" inputMode="numeric" autoComplete="off"
+                                       value={brandDraft.adminPassword}
+                                       onChange={e => setBrandDraft(d => ({...d, adminPassword: e.target.value}))}
+                                       className="w-full px-4 rounded-md border border-line bg-surface text-fg font-mono"
+                                       style={{ minHeight: 'var(--input-h)' }} />
+                                <p className="text-caption text-fg-muted mt-2">
+                                    저장하면 Firestore에만 보관되고 코드에는 남지 않습니다.
+                                </p>
+                            </section>
+                        </main>
+
+                        {/* 저장 바 */}
+                        <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-line p-4 z-40">
+                            <div className="max-w-2xl mx-auto flex gap-2">
+                                <button onClick={() => setBrandEditorOpen(false)} disabled={brandSaving}
+                                        className="tap px-6 rounded-md text-label font-bold text-fg-muted bg-surface-2 hover:bg-line transition-colors disabled:opacity-50">
+                                    취소
+                                </button>
+                                <button onClick={saveBrand} disabled={brandSaving}
+                                        className="flex-1 tap rounded-md text-label font-bold bg-primary text-on-primary hover:bg-primary-hover transition-colors disabled:opacity-50">
+                                    {brandSaving ? "저장 중…" : "저장"}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 토스트·모달이 이 화면에서도 보이도록 재사용 */}
+                        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 z-[80] w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none"
+                             role="status" aria-live="polite">
+                            {toasts.map(t => (
+                                <div key={t.id} className={`toast-enter pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-md shadow-modal text-label font-medium ${
+                                        t.kind === 'error' ? 'bg-danger text-white' : t.kind === 'success' ? 'bg-success text-white' : 'bg-slate-800 text-white'}`}>
+                                    <Icon name={t.kind === 'error' ? 'close' : t.kind === 'success' ? 'checkCircle' : 'helpCircle'} size={18} className="shrink-0 mt-0.5" aria-hidden="true" />
+                                    <span className="flex-1 text-left leading-relaxed">{t.message}</span>
+                                </div>
+                            ))}
+                        </div>
+                        {confirmState && (
+                            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+                                 role="dialog" aria-modal="true"
+                                 onClick={e => { if (e.target === e.currentTarget) closeConfirm(false); }}>
+                                <div className="bg-surface w-full max-w-sm rounded-lg p-6 shadow-modal">
+                                    <p className="text-body font-medium text-fg text-left mb-6 whitespace-pre-line">{confirmState.message}</p>
+                                    <div className="flex gap-2">
+                                        <button autoFocus onClick={() => closeConfirm(false)}
+                                                className="flex-1 tap bg-surface-2 text-fg-muted font-bold rounded-md text-label hover:bg-line">취소</button>
+                                        <button onClick={() => closeConfirm(true)}
+                                                className="flex-1 tap font-bold rounded-md text-label text-white bg-danger hover:opacity-90">{confirmState.confirmLabel}</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
+            if (!isLoggedIn) {
+                const needsDivision = !currentDivision;
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 p-6 relative">
+                        <div className="bg-surface w-full max-w-sm rounded-lg p-8 shadow-modal">
+
+                            {/* 종근당 로고 (설정 화면에서 교체 가능) */}
+                            {brand.companyLogo ? (
+                                <img src={brand.companyLogo} alt={brand.companyName}
+                                     className="max-h-14 w-auto mx-auto mb-6 object-contain" />
+                            ) : (
+                                <div className="w-16 h-16 rounded-md bg-primary-soft text-primary flex items-center justify-center mx-auto mb-6">
+                                    <Icon name="building" size={32} aria-hidden="true" />
+                                </div>
+                            )}
+
+                            <h1 className="text-display font-bold text-fg text-center">{brand.appTitle}</h1>
+
+                            {/* ── 1단계: 사업부 선택 ── */}
+                            {needsDivision ? (
+                                <>
+                                    <p className="text-caption font-medium text-fg-muted mt-2 mb-6 text-center">소속 사업부를 선택하세요</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {brand.divisions.map(d => (
+                                            <button key={d.id} onClick={() => selectDivision(d)}
+                                                    className="flex flex-col items-center gap-3 p-4 rounded-md border border-line bg-surface hover:border-primary hover:bg-primary-soft transition-colors active:scale-[.98]"
+                                                    style={{ minHeight: '128px' }}>
+                                                <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
+                                                    {d.logo
+                                                        ? <img src={d.logo} alt="" className="max-w-full max-h-full object-contain" />
+                                                        : <div className="w-12 h-12 rounded-md bg-primary-soft text-primary flex items-center justify-center">
+                                                              <Icon name="building" size={22} aria-hidden="true" />
+                                                          </div>}
+                                                </div>
+                                                <div className="text-center">
+                                                    <div className="text-label font-bold text-fg leading-tight">{d.label}</div>
+                                                    {d.sublabel && <div className="text-caption text-fg-muted mt-1">{d.sublabel}</div>}
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                            <>
+                            {/* ── 2단계: 로그인 ── */}
+                            <div className="flex items-center justify-center gap-2 mt-3 mb-6">
+                                {currentDivision.logo && <img src={currentDivision.logo} alt="" className="h-6 w-auto object-contain" />}
+                                <span className="text-label font-bold text-primary">{currentDivision.label}</span>
+                                <button onClick={clearDivision}
+                                        className="text-caption font-medium text-fg-subtle underline underline-offset-2 hover:text-fg ml-1">
+                                    변경
+                                </button>
+                            </div>
+
                             <form onSubmit={handleUserLogin} className="space-y-4">
-                                <input type="text" inputMode="numeric" pattern="\d*" maxLength={6} className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-center text-lg font-black tracking-widest outline-none focus:border-blue-500" placeholder="사번 (6자리)" value={loginEmpId} onChange={e => setLoginEmpId(e.target.value)} required />
-                                <input type="password" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-center text-lg font-black tracking-widest outline-none focus:border-blue-500" placeholder="접속 암호 (MR용)" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
-                                <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-100 mt-4">입장하기</button>
+                                <div>
+                                    <label htmlFor="login-emp" className="block text-label font-medium text-fg mb-2">사번</label>
+                                    <input id="login-emp" type="text" inputMode="numeric" pattern="\d*" maxLength={6}
+                                           autoComplete="username"
+                                           className="w-full px-4 rounded-md bg-surface-2 border border-line text-fg text-center tracking-widest font-bold"
+                                           style={{ minHeight: 'var(--input-h)' }}
+                                           placeholder="6자리" value={loginEmpId}
+                                           onChange={e => setLoginEmpId(e.target.value)} required />
+                                </div>
+                                <div>
+                                    <label htmlFor="login-pw" className="block text-label font-medium text-fg mb-2">접속 암호</label>
+                                    <input id="login-pw" type="password" autoComplete="current-password"
+                                           className="w-full px-4 rounded-md bg-surface-2 border border-line text-fg text-center tracking-widest font-bold"
+                                           style={{ minHeight: 'var(--input-h)' }}
+                                           placeholder="MR용 암호" value={loginPassword}
+                                           onChange={e => setLoginPassword(e.target.value)} required />
+                                </div>
+                                <button className="w-full rounded-md bg-primary text-on-primary font-bold text-body hover:bg-primary-hover active:scale-[.99] transition-all mt-2"
+                                        style={{ minHeight: 'var(--btn-h)' }}>
+                                    입장하기
+                                </button>
                             </form>
+                            </>
+                            )}
+                        </div>
+
+                        {/* 브랜드 설정 진입 (관리자 전용) */}
+                        <button onClick={() => { setBrandAuthInput(""); setBrandAuthOpen(true); }}
+                                aria-label="브랜드 설정"
+                                className="tap-icon absolute bottom-5 right-5 rounded-md text-slate-500 hover:text-slate-200 hover:bg-white/10 transition-colors">
+                            <Icon name="settings" size={20} aria-hidden="true" />
+                        </button>
+
+                        {/* 브랜드 설정 비밀번호 */}
+                        {brandAuthOpen && (
+                            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4"
+                                 role="dialog" aria-modal="true" aria-labelledby="brand-auth-title"
+                                 onClick={e => { if (e.target === e.currentTarget) setBrandAuthOpen(false); }}>
+                                <div className="bg-surface w-full max-w-sm rounded-lg p-6 shadow-modal">
+                                    <div className="flex items-center justify-between mb-5">
+                                        <h2 id="brand-auth-title" className="text-title font-bold text-fg flex items-center gap-2">
+                                            <Icon name="lock" size={20} className="text-primary" aria-hidden="true" /> 브랜드 설정
+                                        </h2>
+                                        <button onClick={() => setBrandAuthOpen(false)} aria-label="닫기"
+                                                className="tap-icon rounded-md text-fg-subtle hover:text-fg">
+                                            <Icon name="close" size={20} aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                    <form onSubmit={(e) => {
+                                        e.preventDefault();
+                                        if (brandAuthInput.trim() === String(brand.adminPassword || "").trim()) openBrandEditor();
+                                        else toast("비밀번호가 일치하지 않습니다.", "error");
+                                    }}>
+                                        <label htmlFor="brand-pw" className="block text-label font-medium text-fg mb-2">비밀번호</label>
+                                        <input id="brand-pw" type="password" autoFocus autoComplete="off"
+                                               value={brandAuthInput} onChange={e => setBrandAuthInput(e.target.value)}
+                                               className="w-full px-4 rounded-md bg-surface-2 border border-line text-fg text-center tracking-widest"
+                                               style={{ minHeight: 'var(--input-h)' }} />
+                                        <button className="w-full mt-4 rounded-md bg-primary text-on-primary font-bold text-label hover:bg-primary-hover transition-colors"
+                                                style={{ minHeight: 'var(--btn-h)' }}>
+                                            확인
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 로그인 화면용 토스트 */}
+                        <div className="fixed left-1/2 -translate-x-1/2 bottom-6 z-[80] w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none"
+                             role="status" aria-live="polite">
+                            {toasts.map(t => (
+                                <div key={t.id} className={`toast-enter pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-md shadow-modal text-label font-medium ${
+                                        t.kind === 'error' ? 'bg-danger text-white' : t.kind === 'success' ? 'bg-success text-white' : 'bg-slate-800 text-white'}`}>
+                                    <Icon name={t.kind === 'error' ? 'close' : t.kind === 'success' ? 'checkCircle' : 'helpCircle'} size={18} className="shrink-0 mt-0.5" aria-hidden="true" />
+                                    <span className="flex-1 text-left leading-relaxed">{t.message}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 );
@@ -720,9 +1285,20 @@
                 <div className="min-h-screen bg-slate-50 font-sans pb-24 relative">
                     {/* 상단 헤더 */}
                     <header className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-40 px-4 py-4 flex justify-between items-center shadow-sm">
-                        <div className="flex items-center gap-2 text-slate-800 uppercase font-black tracking-tighter">
-                            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-md"><Icon name="file" size={18}/></div>
-                            <span className="text-lg">DM HUB</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                            {currentDivision && currentDivision.logo ? (
+                                <img src={currentDivision.logo} alt="" className="h-8 w-8 object-contain shrink-0" />
+                            ) : (
+                                <div className="bg-primary p-2 rounded-md text-on-primary shrink-0"><Icon name="file" size={18} aria-hidden="true"/></div>
+                            )}
+                            <div className="min-w-0">
+                                <div className="text-body font-bold text-fg leading-tight truncate">
+                                    {currentDivision ? currentDivision.label : brand.appTitle}
+                                </div>
+                                {currentDivision && currentDivision.sublabel && (
+                                    <div className="text-caption text-fg-muted truncate">{currentDivision.sublabel}</div>
+                                )}
+                            </div>
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={handleLogout} className="px-3 py-2 rounded-xl text-[10px] font-black text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1 active:scale-95">
