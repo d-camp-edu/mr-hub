@@ -210,7 +210,7 @@
         }
     </style>
 </head>
-<body class="bg-slate-50">
+<body class="bg-surface-2">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -842,7 +842,22 @@
                     const inqData = sortDesc(inquiries).map(i => ({ 사번: i.empId, 사업부: i.division, 팀: i.team, 담당자: i.name, 내용: i.content, 상태: i.completed ? "답변/처리완료" : "대기중", 일시: i.dateString }));
                     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(inqData), "문의건의");
 
+                    // 자료실·영상 목록 (기존 엑셀에는 빠져 있어 백업으로 쓸 수 없었음)
+                    const toRow = (m) => ({
+                        분류: m.category, 제목: m.title, 설명: m.description || "",
+                        PDF링크: m.pdfUrl || "", PPT링크: m.pptUrl || "", 영상링크: m.youtubeUrl || "",
+                        썸네일: m.thumbnail ? "있음" : "",
+                        등록일: m.timestamp ? new Date(m.timestamp).toLocaleString('ko-KR') : ""
+                    });
+                    const matData = sortDesc(messages.filter(m => !m.isVideo && !m.youtubeUrl && m.category !== '제품 브로슈어')).map(toRow);
+                    const vidData = sortDesc(messages.filter(m => m.isVideo || m.youtubeUrl)).map(toRow);
+                    const brochData = sortDesc(messages.filter(m => m.category === '제품 브로슈어')).map(toRow);
+                    window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(matData), "자료실목록");
+                    window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(vidData), "교육영상목록");
+                    window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(brochData), "브로슈어품목");
+
                     window.XLSX.writeFile(wb, `DM_HUB_REPORT_${new Date().toISOString().slice(0,10)}.xlsx`);
+                    toast(`엑셀을 저장했습니다. (자료 ${matData.length}건 · 영상 ${vidData.length}건 포함)`, "success");
                 } catch(e) { toast("엑셀 생성 중 오류가 발생했습니다.", "error"); }
             };
 
@@ -1527,7 +1542,7 @@
                         {/* 브랜드 설정 진입 (관리자 전용) */}
                         <button onClick={() => { setBrandAuthInput(""); setBrandAuthOpen(true); }}
                                 aria-label="브랜드 설정"
-                                className="tap-icon absolute bottom-5 right-5 rounded-md text-slate-500 hover:text-slate-200 hover:bg-white/10 transition-colors">
+                                className="tap-icon absolute bottom-5 right-5 rounded-md text-fg-muted hover:text-slate-200 hover:bg-surface/10 transition-colors">
                             <Icon name="settings" size={20} aria-hidden="true" />
                         </button>
 
@@ -1581,9 +1596,9 @@
             }
 
             return (
-                <div className="min-h-screen bg-slate-50 font-sans pb-24 relative">
+                <div className="min-h-screen bg-surface-2 font-sans pb-24 relative">
                     {/* 상단 헤더 */}
-                    <header className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-40 px-4 py-4 flex justify-between items-center shadow-sm">
+                    <header className="bg-surface/90 backdrop-blur-md border-b sticky top-0 z-40 px-4 py-4 flex justify-between items-center shadow-sm">
                         <div className="flex items-center gap-2 min-w-0">
                             {currentDivision && currentDivision.logo ? (
                                 <img src={currentDivision.logo} alt="" className="h-8 w-8 object-contain shrink-0" />
@@ -1600,7 +1615,7 @@
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <button onClick={handleLogout} className="px-3 py-2 rounded-xl text-[10px] font-black text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1 active:scale-95">
+                            <button onClick={handleLogout} className="px-3 py-2 rounded-xl text-caption font-bold text-fg-muted bg-surface-2 hover:bg-line transition-colors flex items-center gap-1 active:scale-95">
                                 <Icon name="logout" size={14} /> 나가기
                             </button>
                             <button onClick={() => {
@@ -1610,15 +1625,15 @@
                                 } else {
                                     setShowAdminLogin(true);
                                 }
-                            }} className={`px-3 py-2 rounded-xl text-[10px] font-black transition-all flex items-center gap-1 active:scale-95 ${isAdminMode ? 'bg-red-50 text-red-600' : 'bg-slate-800 text-white'}`}>
-                                {isAdminMode ? <span className="text-[10px] font-black px-1">PM 종료</span> : <><Icon name="lock" size={14} /> PM</>}
+                            }} className={`px-3 py-2 rounded-xl text-caption font-bold transition-all flex items-center gap-1 active:scale-95 ${isAdminMode ? 'bg-danger-soft text-danger' : 'bg-slate-800 text-white'}`}>
+                                {isAdminMode ? <span className="text-caption font-bold px-1">PM 종료</span> : <><Icon name="lock" size={14} /> PM</>}
                             </button>
                         </div>
                     </header>
 
                     {/* 유저 모드 네비게이션 */}
                     {!isAdminMode && (
-                        <nav className="bg-white border-b sticky top-[69px] z-30 overflow-x-auto custom-scrollbar">
+                        <nav className="bg-surface border-b sticky top-[69px] z-30 overflow-x-auto custom-scrollbar">
                             <div className="flex w-max min-w-full p-1">
                                 {[
                                     { id: "home", label: "인증사진", icon: <Icon name="camera" size={16}/> },
@@ -1629,7 +1644,7 @@
                                     { id: "videos", label: "교육영상", icon: <Icon name="youtube" size={16}/> },
                                     { id: "inquiries", label: "문의/건의", icon: <Icon name="messageSquare" size={16}/> }
                                 ].map(tab => (
-                                    <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSelectedCategory("전체"); }} className={`flex-1 py-3 px-4 text-[11px] font-black flex flex-col items-center gap-1 rounded-xl transition-all ${activeTab === tab.id ? "bg-blue-50 text-blue-600 shadow-sm" : "text-slate-400 hover:bg-slate-50"}`}>
+                                    <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSelectedCategory("전체"); }} className={`flex-1 py-3 px-4 text-caption font-bold flex flex-col items-center gap-1 rounded-xl transition-all ${activeTab === tab.id ? "bg-primary-soft text-primary shadow-sm" : "text-fg-subtle hover:bg-surface-2"}`}>
                                         {tab.icon} <span className="whitespace-nowrap">{tab.label}</span>
                                     </button>
                                 ))}
@@ -1641,47 +1656,74 @@
                         {/* 관리자 뷰 */}
                         {isAdminMode ? (
                             <div className="space-y-4 animate-in fade-in">
-                                <div className="bg-white p-6 rounded-3xl border border-blue-50 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div className="bg-surface p-6 rounded-lg border border-blue-50 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
                                     <div className="text-center sm:text-left w-full sm:w-auto">
-                                        <h2 className="font-black text-lg text-blue-600 uppercase tracking-widest flex items-center justify-center sm:justify-start"><Icon name="settings" size={20} className="inline mr-2"/>관리자 설정</h2>
-                                        <div className="flex items-center justify-center sm:justify-start gap-2 mt-3 bg-slate-50 p-2 rounded-xl border w-full overflow-hidden">
-                                            <span className="text-[10px] font-bold text-slate-500 shrink-0">MR 암호:</span>
-                                            <input className="flex-1 min-w-0 p-1 bg-white border rounded text-xs font-black text-center outline-none" value={newMrPassword} onChange={e=>setNewMrPassword(e.target.value)} />
-                                            <button onClick={() => { window.FB.setDoc(docRef('settings', 'config'), { mrPassword: newMrPassword }, { merge: true }); toast("암호 변경완료", "success"); }} className="bg-slate-800 text-white px-2 py-1.5 rounded text-[10px] font-black shrink-0">변경</button>
+                                        <h2 className="font-bold text-lg text-primary uppercase tracking-widest flex items-center justify-center sm:justify-start"><Icon name="settings" size={20} className="inline mr-2"/>관리자 설정</h2>
+                                        <div className="flex items-center justify-center sm:justify-start gap-2 mt-3 bg-surface-2 p-2 rounded-xl border w-full overflow-hidden">
+                                            <span className="text-caption font-bold text-fg-muted shrink-0">MR 암호:</span>
+                                            <input className="flex-1 min-w-0 p-1 bg-surface border rounded text-caption font-bold text-center outline-none" value={newMrPassword} onChange={e=>setNewMrPassword(e.target.value)} />
+                                            <button onClick={() => { window.FB.setDoc(docRef('settings', 'config'), { mrPassword: newMrPassword }, { merge: true }); toast("암호 변경완료", "success"); }} className="bg-slate-800 text-white px-2 py-1.5 rounded text-caption font-bold shrink-0">변경</button>
                                         </div>
                                     </div>
-                                    <button onClick={handleDownloadExcel} className="w-full sm:w-auto bg-green-600 text-white px-6 py-4 rounded-2xl text-xs font-black flex items-center justify-center gap-2 shadow-md hover:bg-green-700 shrink-0">
+                                    <button onClick={handleDownloadExcel} className="w-full sm:w-auto bg-success text-white px-6 py-4 rounded-md text-caption font-bold flex items-center justify-center gap-2 shadow-md hover:opacity-90 shrink-0">
                                         <Icon name="excel" size={18}/> 엑셀 다운로드
                                     </button>
                                 </div>
 
-                                <div className="flex flex-wrap bg-slate-200 p-1 rounded-2xl gap-1">
+                                <nav className="space-y-3" aria-label="관리자 메뉴">
                                     {[
-                                        {id:'home', lbl:'사진인증'}, {id:'brochures', lbl:'브로셔관리'}, {id:'reqs301', lbl:'301관리'}, {id:'sympList', lbl:'심포지엄관리'}, {id:'inquiries', lbl:'문의관리'},
-                                        {id:'categories', lbl:'자료분류'}, {id:'vidCats', lbl:'영상분류'}, {id:'materials', lbl:'자료등록'}, {id:'videos', lbl:'영상등록'}, {id:'logs', lbl:'로그'}
-                                    ].map(t => (
-                                        <button key={t.id} onClick={() => { setActiveTab(t.id); setEditingId(null); setEditingSympId(null); if(t.id==='logs') fetchRecentLogs(); }} className={`flex-1 min-w-[65px] py-2 px-1 text-[10px] sm:text-[11px] font-black rounded-xl transition-all ${activeTab === t.id ? 'bg-white shadow-md text-blue-600' : 'text-slate-500 hover:bg-slate-300'}`}>
-                                            {t.lbl}
-                                        </button>
+                                        { group: '신청 관리', items: [
+                                            {id:'reqs301',  lbl:'301'},
+                                            {id:'sympList', lbl:'심포지엄'},
+                                            {id:'brochures',lbl:'브로슈어'},
+                                            {id:'home',     lbl:'사진인증'},
+                                            {id:'inquiries',lbl:'문의'}
+                                        ]},
+                                        { group: '콘텐츠', items: [
+                                            {id:'materials', lbl:'자료 등록'},
+                                            {id:'videos',    lbl:'영상 등록'},
+                                            {id:'categories',lbl:'자료 분류'},
+                                            {id:'vidCats',   lbl:'영상 분류'}
+                                        ]},
+                                        { group: '기록', items: [
+                                            {id:'logs', lbl:'활동 로그'}
+                                        ]}
+                                    ].map(section => (
+                                        <div key={section.group}>
+                                            <p className="text-caption font-bold text-fg-muted mb-2 text-left">{section.group}</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {section.items.map(t => (
+                                                    <button key={t.id}
+                                                            onClick={() => { setActiveTab(t.id); setEditingId(null); setEditingSympId(null); if(t.id==='logs') fetchRecentLogs(); }}
+                                                            aria-current={activeTab === t.id ? 'page' : undefined}
+                                                            className={`tap px-4 rounded-md text-label font-medium transition-colors ${
+                                                                activeTab === t.id
+                                                                    ? 'bg-primary text-on-primary'
+                                                                    : 'bg-surface text-fg-muted border border-line hover:bg-surface-2'}`}>
+                                                        {t.lbl}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     ))}
-                                </div>
+                                </nav>
 
                                 {/* Admin: 사진 인증 관리 */}
                                 {activeTab === 'home' && (
-                                    <div className="bg-white p-6 rounded-[2rem] border shadow-sm">
-                                        <h3 className="font-black text-xs mb-4 text-slate-400">MR 브로슈어 현장 활용 인증샷</h3>
+                                    <div className="bg-surface p-6 rounded-lg border shadow-sm">
+                                        <h3 className="font-bold text-caption mb-4 text-fg-subtle">MR 브로슈어 현장 활용 인증샷</h3>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                             {brochurePhotos.map(photo => (
                                                 <div key={photo.id} className="relative rounded-xl overflow-hidden border">
                                                     <img src={photo.photoBase64} alt="인증샷" className="w-full h-32 object-cover" />
-                                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white p-2 text-[10px]">
+                                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white p-2 text-caption">
                                                         <p className="font-bold line-clamp-1">{photo.division} {photo.team} {photo.name}</p>
                                                         <p className="opacity-80">{photo.dateString.slice(0, 11)}</p>
                                                     </div>
-                                                    <button onClick={() => deleteItem('brochure_photos', photo.id)} className="tap-icon absolute top-1 right-1 bg-red-500 text-white p-1 rounded" aria-label="삭제"><Icon name="trash" size={12} aria-hidden="true"/></button>
+                                                    <button onClick={() => deleteItem('brochure_photos', photo.id)} className="tap-icon absolute top-1 right-1 bg-danger text-white p-1 rounded" aria-label="삭제"><Icon name="trash" size={12} aria-hidden="true"/></button>
                                                 </div>
                                             ))}
-                                            {brochurePhotos.length === 0 && <p className="col-span-2 sm:col-span-3 text-center text-slate-400 py-10">등록된 사진이 없습니다.</p>}
+                                            {brochurePhotos.length === 0 && <p className="col-span-2 sm:col-span-3 text-center text-fg-subtle py-10">등록된 사진이 없습니다.</p>}
                                         </div>
                                     </div>
                                 )}
@@ -1689,8 +1731,8 @@
                                 {/* Admin: 브로셔 관리 (품목 추가 + 신청 내역) */}
                                 {activeTab === 'brochures' && (
                                     <div className="space-y-4 animate-in fade-in">
-                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden w-full">
-                                            <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">신청 폼 브로셔 품목 추가</h3>
+                                        <div className="bg-surface p-6 rounded-lg border border-line shadow-sm overflow-hidden w-full">
+                                            <h3 className="font-bold text-caption mb-4 text-fg-subtle uppercase tracking-widest text-center">신청 폼 브로셔 품목 추가</h3>
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
                                                 if(!window.FB || !newBrochureName.trim()) return;
@@ -1699,32 +1741,32 @@
                                                 });
                                                 setNewBrochureName("");
                                             }} className="flex gap-2 w-full">
-                                                <input className="flex-1 min-w-0 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="예: 24년형 메인 리플렛" value={newBrochureName} onChange={e => setNewBrochureName(e.target.value)} required />
-                                                <button type="submit" className="tap-icon shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95" aria-label="추가"><Icon name="plus" size={20} aria-hidden="true"/></button>
+                                                <input className="flex-1 min-w-0 p-4 bg-surface-2 border-2 border-line rounded-md text-sm font-bold outline-none focus:border-blue-500" placeholder="예: 24년형 메인 리플렛" value={newBrochureName} onChange={e => setNewBrochureName(e.target.value)} required />
+                                                <button type="submit" className="tap-icon shrink-0 bg-primary text-white px-5 rounded-md font-bold text-sm flex items-center justify-center shadow-md active:scale-95" aria-label="추가"><Icon name="plus" size={20} aria-hidden="true"/></button>
                                             </form>
                                         </div>
-                                        <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
-                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">등록된 신청 품목</div>
+                                        <div className="bg-surface rounded-lg border overflow-hidden shadow-sm">
+                                            <div className="p-4 bg-surface-2 border-b font-bold text-caption text-fg-subtle">등록된 신청 품목</div>
                                             <div className="divide-y max-h-[200px] overflow-y-auto custom-scrollbar">
                                                 {messages.filter(m => m.category === "제품 브로슈어").map(item => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center text-left">
-                                                        <span className="font-bold text-sm text-slate-800">{item.title}</span>
-                                                        <button onClick={async () => { if (await askConfirm(`"${item.title}" 항목을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) { await window.FB.deleteDoc(docRef('messages', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-slate-300 hover:text-red-500" aria-label="삭제"><Icon name="trash" size={18} aria-hidden="true"/></button>
+                                                        <span className="font-bold text-sm text-fg">{item.title}</span>
+                                                        <button onClick={async () => { if (await askConfirm(`"${item.title}" 항목을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) { await window.FB.deleteDoc(docRef('messages', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-fg-subtle hover:text-danger" aria-label="삭제"><Icon name="trash" size={18} aria-hidden="true"/></button>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
-                                            <div className="p-4 bg-blue-50 font-black text-xs text-blue-600 border-b">브로셔 신청 내역 (체크 시 발송 완료 처리)</div>
+                                        <div className="bg-surface rounded-lg border overflow-hidden shadow-sm">
+                                            <div className="p-4 bg-primary-soft font-bold text-caption text-primary border-b">브로셔 신청 내역 (체크 시 발송 완료 처리)</div>
                                             <div className="divide-y max-h-[400px] overflow-y-auto custom-scrollbar">
                                                 {requests.map(item => (
-                                                    <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
-                                                        <button onClick={() => toggleStatus('requests', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
+                                                    <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-surface-2' : ''}`}>
+                                                        <button onClick={() => toggleStatus('requests', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-success"/> : <Icon name="circle" size={20} className="text-fg-subtle"/>}</button>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className={`text-sm font-bold mt-1 truncate ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>{item.brochureName} ({item.quantity}부)</p>
-                                                            <p className="text-[10px] text-slate-500">{item.accountName} | {item.requesterName}({item.empId}) | {item.phone}</p>
+                                                            <p className={`text-sm font-bold mt-1 truncate ${item.completed ? 'line-through text-fg-subtle' : 'text-fg'}`}>{item.brochureName} ({item.quantity}부)</p>
+                                                            <p className="text-caption text-fg-muted">{item.accountName} | {item.requesterName}({item.empId}) | {item.phone}</p>
                                                         </div>
-                                                        <button onClick={() => deleteItem('requests', item.id)} className="tap-icon text-red-400 shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
+                                                        <button onClick={() => deleteItem('requests', item.id)} className="tap-icon text-danger shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -1734,23 +1776,23 @@
 
                                 {/* Admin: 301 관리 탭 */}
                                 {activeTab === 'reqs301' && (
-                                    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
-                                        <div className="p-4 bg-orange-50 font-black text-xs text-orange-600 border-b">301 다기관 설명회 신청 내역 (체크 시 완료 처리)</div>
+                                    <div className="bg-surface rounded-lg border overflow-hidden shadow-sm animate-in fade-in">
+                                        <div className="p-4 bg-orange-50 font-bold text-caption text-orange-600 border-b">301 다기관 설명회 신청 내역 (체크 시 완료 처리)</div>
                                         <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar">
                                             {grouped301RequestsAdmin.map((group, idx) => (
-                                                <div key={idx} className={`p-4 flex gap-3 ${group.completed ? 'opacity-50 bg-slate-50' : ''}`}>
+                                                <div key={idx} className={`p-4 flex gap-3 ${group.completed ? 'opacity-50 bg-surface-2' : ''}`}>
                                                     <button onClick={() => toggle301GroupStatus(group.docIds, group.completed)} className="mt-0.5">
-                                                        {group.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}
+                                                        {group.completed ? <Icon name="checkCircle" size={20} className="text-success"/> : <Icon name="circle" size={20} className="text-fg-subtle"/>}
                                                     </button>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className={`text-sm font-bold mt-1 truncate ${group.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{group.title}] 총 {group.count}건 신청</p>
-                                                        <p className="text-[10px] text-slate-500 truncate">진행: {group.date} | 장소: {group.location}</p>
-                                                        <p className="text-[10px] text-slate-500 truncate">신청: {group.division} {group.team} {group.name}({group.empId})</p>
+                                                        <p className={`text-sm font-bold mt-1 truncate ${group.completed ? 'line-through text-fg-subtle' : 'text-fg'}`}>[{group.title}] 총 {group.count}건 신청</p>
+                                                        <p className="text-caption text-fg-muted truncate">진행: {group.date} | 장소: {group.location}</p>
+                                                        <p className="text-caption text-fg-muted truncate">신청: {group.division} {group.team} {group.name}({group.empId})</p>
                                                     </div>
-                                                    <button onClick={() => delete301Group(group.docIds)} className="tap-icon text-red-400 shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
+                                                    <button onClick={() => delete301Group(group.docIds)} className="tap-icon text-danger shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                 </div>
                                             ))}
-                                            {grouped301RequestsAdmin.length === 0 && <p className="py-10 text-center text-slate-400 italic font-bold">내역이 없습니다.</p>}
+                                            {grouped301RequestsAdmin.length === 0 && <p className="py-10 text-center text-fg-subtle italic font-bold">내역이 없습니다.</p>}
                                         </div>
                                     </div>
                                 )}
@@ -1758,12 +1800,12 @@
                                 {/* Admin: 심포지엄 관리 (목록 추가 + 신청 내역) */}
                                 {activeTab === 'sympList' && (
                                     <div className="space-y-4 animate-in fade-in">
-                                        <div className="bg-white p-6 rounded-[2rem] border shadow-sm w-full overflow-hidden">
-                                            <h3 className="font-black text-xs mb-4 text-slate-400 text-center">{editingSympId ? "모객용 심포지엄 수정" : "모객용 심포지엄 추가"}</h3>
+                                        <div className="bg-surface p-6 rounded-lg border shadow-sm w-full overflow-hidden">
+                                            <h3 className="font-bold text-caption mb-4 text-fg-subtle text-center">{editingSympId ? "모객용 심포지엄 수정" : "모객용 심포지엄 추가"}</h3>
                                             <div className="flex flex-col gap-3">
-                                                <input className="w-full p-3 bg-slate-50 border rounded-xl text-sm font-bold min-w-0" placeholder="심포지엄명 (예: 24년 춘계 학술대회)" value={newSymposiumName} onChange={e => setNewSymposiumName(e.target.value)} />
+                                                <input className="w-full p-3 bg-surface-2 border rounded-xl text-sm font-bold min-w-0" placeholder="심포지엄명 (예: 24년 춘계 학술대회)" value={newSymposiumName} onChange={e => setNewSymposiumName(e.target.value)} />
                                                 <div className="flex items-center gap-3">
-                                                    <label className="flex-1 min-w-0 cursor-pointer bg-slate-50 border-2 border-slate-100 rounded-xl p-3 flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors text-slate-500 text-xs font-bold">
+                                                    <label className="flex-1 min-w-0 cursor-pointer bg-surface-2 border-2 border-line rounded-xl p-3 flex items-center justify-center gap-2 hover:bg-surface-2 transition-colors text-fg-muted text-caption font-bold">
                                                         <Icon name="image" size={16} className="shrink-0" />
                                                         <span className="truncate">아젠다 사진 첨부(선택)</span>
                                                         <input type="file" accept="image/*" onChange={handleAgendaUpload} className="hidden" />
@@ -1771,7 +1813,7 @@
                                                     {newSympAgendaBase64 && (
                                                         <div className="relative shrink-0">
                                                             <img src={newSympAgendaBase64} className="h-10 w-10 object-cover rounded shadow" alt="agenda" />
-                                                            <button type="button" onClick={() => setNewSympAgendaBase64("")} className="tap-icon absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm" aria-label="삭제"><Icon name="trash" size={12} aria-hidden="true"/></button>
+                                                            <button type="button" onClick={() => setNewSympAgendaBase64("")} className="tap-icon absolute -top-2 -right-2 bg-danger text-white rounded-full p-1 shadow-sm" aria-label="삭제"><Icon name="trash" size={12} aria-hidden="true"/></button>
                                                         </div>
                                                     )}
                                                 </div>
@@ -1786,13 +1828,13 @@
                                                             toast("추가되었습니다.", "success");
                                                         }
                                                         setNewSymposiumName(""); setNewSympAgendaBase64(""); setEditingSympId(null);
-                                                    }} className="flex-1 bg-blue-600 text-white p-3 rounded-xl font-bold flex justify-center items-center gap-2"><Icon name={editingSympId ? "save" : "plus"} size={18}/> {editingSympId ? "저장" : "심포지엄 추가"}</button>
-                                                    {editingSympId && <button onClick={() => { setEditingSympId(null); setNewSymposiumName(""); setNewSympAgendaBase64(""); }} className="px-6 bg-slate-100 text-slate-500 font-bold rounded-xl text-sm hover:bg-slate-200 transition-all">취소</button>}
+                                                    }} className="flex-1 bg-primary text-white p-3 rounded-xl font-bold flex justify-center items-center gap-2"><Icon name={editingSympId ? "save" : "plus"} size={18}/> {editingSympId ? "저장" : "심포지엄 추가"}</button>
+                                                    {editingSympId && <button onClick={() => { setEditingSympId(null); setNewSymposiumName(""); setNewSympAgendaBase64(""); }} className="px-6 bg-surface-2 text-fg-muted font-bold rounded-xl text-sm hover:bg-line transition-all">취소</button>}
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="bg-white rounded-[2rem] border overflow-hidden">
-                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">심포지엄 목록</div>
+                                        <div className="bg-surface rounded-lg border overflow-hidden">
+                                            <div className="p-4 bg-surface-2 border-b font-bold text-caption text-fg-subtle">심포지엄 목록</div>
                                             <div className="divide-y max-h-[200px] overflow-y-auto custom-scrollbar">
                                                 {symposiumList.map(item => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center">
@@ -1801,26 +1843,26 @@
                                                             <span className="font-bold text-sm truncate">{item.name}</span>
                                                         </div>
                                                         <div className="flex gap-1 shrink-0">
-                                                            <button onClick={() => { setEditingSympId(item.id); setNewSymposiumName(item.name); setNewSympAgendaBase64(item.agendaImage || ""); window.scrollTo(0,0); }} className="tap-icon p-2 text-slate-400 hover:text-blue-600" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
-                                                            <button onClick={() => deleteItem('symposium_list', item.id)} className="tap-icon p-2 text-slate-400 hover:text-red-500" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
+                                                            <button onClick={() => { setEditingSympId(item.id); setNewSymposiumName(item.name); setNewSympAgendaBase64(item.agendaImage || ""); window.scrollTo(0,0); }} className="tap-icon p-2 text-fg-subtle hover:text-primary" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
+                                                            <button onClick={() => deleteItem('symposium_list', item.id)} className="tap-icon p-2 text-fg-subtle hover:text-danger" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                         </div>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
-                                            <div className="p-4 bg-green-50 font-black text-xs text-green-600 border-b">심포지엄 모객 신청 내역 (체크 시 완료 처리)</div>
+                                        <div className="bg-surface rounded-lg border overflow-hidden shadow-sm">
+                                            <div className="p-4 bg-success-soft font-bold text-caption text-success border-b">심포지엄 모객 신청 내역 (체크 시 완료 처리)</div>
                                             <div className="divide-y max-h-[400px] overflow-y-auto custom-scrollbar">
                                                 {sympRequests.map(item => (
-                                                    <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
-                                                        <button onClick={() => toggleStatus('symposium_requests', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
+                                                    <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-surface-2' : ''}`}>
+                                                        <button onClick={() => toggleStatus('symposium_requests', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-success"/> : <Icon name="circle" size={20} className="text-fg-subtle"/>}</button>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className={`text-sm font-bold mt-1 truncate ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{item.symposiumName}] {item.accountName} ({item.targetProduct}: ₩{item.rxAmount})</p>
-                                                            <p className="text-[10px] text-slate-600 truncate">닥터: {item.doctorName} ({item.doctorPhone})</p>
-                                                            <p className="text-[10px] text-slate-500 truncate">신청: {item.division} {item.team} {item.name}({item.empId}) | {item.phone}</p>
-                                                            {item.memo && <p className="text-[10px] bg-slate-100 p-2 rounded mt-1 text-slate-600 break-words">요청: {item.memo}</p>}
+                                                            <p className={`text-sm font-bold mt-1 truncate ${item.completed ? 'line-through text-fg-subtle' : 'text-fg'}`}>[{item.symposiumName}] {item.accountName} ({item.targetProduct}: ₩{item.rxAmount})</p>
+                                                            <p className="text-caption text-fg-muted truncate">닥터: {item.doctorName} ({item.doctorPhone})</p>
+                                                            <p className="text-caption text-fg-muted truncate">신청: {item.division} {item.team} {item.name}({item.empId}) | {item.phone}</p>
+                                                            {item.memo && <p className="text-caption bg-surface-2 p-2 rounded mt-1 text-fg-muted break-words">요청: {item.memo}</p>}
                                                         </div>
-                                                        <button onClick={() => deleteItem('symposium_requests', item.id)} className="tap-icon text-red-400 shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
+                                                        <button onClick={() => deleteItem('symposium_requests', item.id)} className="tap-icon text-danger shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -1830,20 +1872,20 @@
 
                                 {/* Admin: 문의 관리 탭 */}
                                 {activeTab === 'inquiries' && (
-                                    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
-                                        <div className="p-4 bg-purple-50 font-black text-xs text-purple-600 border-b">문의 및 건의 내역 (체크 시 답변완료 처리)</div>
+                                    <div className="bg-surface rounded-lg border overflow-hidden shadow-sm animate-in fade-in">
+                                        <div className="p-4 bg-purple-50 font-bold text-caption text-purple-600 border-b">문의 및 건의 내역 (체크 시 답변완료 처리)</div>
                                         <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar">
                                             {inquiries.map(item => (
-                                                <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-slate-50' : ''}`}>
-                                                    <button onClick={() => toggleStatus('inquiries', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-green-500"/> : <Icon name="circle" size={20} className="text-slate-300"/>}</button>
+                                                <div key={item.id} className={`p-4 flex gap-3 ${item.completed ? 'opacity-50 bg-surface-2' : ''}`}>
+                                                    <button onClick={() => toggleStatus('inquiries', item.id, item.completed)} className="mt-0.5">{item.completed ? <Icon name="checkCircle" size={20} className="text-success"/> : <Icon name="circle" size={20} className="text-fg-subtle"/>}</button>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className={`text-sm font-bold mt-1 truncate ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>[{item.division} {item.team}] {item.name}({item.empId})</p>
-                                                        <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap bg-slate-50 p-3 rounded-xl border break-words">{item.content}</p>
+                                                        <p className={`text-sm font-bold mt-1 truncate ${item.completed ? 'line-through text-fg-subtle' : 'text-fg'}`}>[{item.division} {item.team}] {item.name}({item.empId})</p>
+                                                        <p className="text-caption text-fg-muted mt-1 whitespace-pre-wrap bg-surface-2 p-3 rounded-xl border break-words">{item.content}</p>
                                                     </div>
-                                                    <button onClick={() => deleteItem('inquiries', item.id)} className="tap-icon text-red-400 shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
+                                                    <button onClick={() => deleteItem('inquiries', item.id)} className="tap-icon text-danger shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                 </div>
                                             ))}
-                                            {inquiries.length === 0 && <p className="py-10 text-center text-slate-400 italic font-bold">문의 내역이 없습니다.</p>}
+                                            {inquiries.length === 0 && <p className="py-10 text-center text-fg-subtle italic font-bold">문의 내역이 없습니다.</p>}
                                         </div>
                                     </div>
                                 )}
@@ -1851,8 +1893,8 @@
                                 {/* 카테고리 관리 */}
                                 {activeTab === 'categories' && (
                                     <div className="space-y-4 animate-in fade-in">
-                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden w-full">
-                                            <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">자료실 카테고리 추가</h3>
+                                        <div className="bg-surface p-6 rounded-lg border border-line shadow-sm overflow-hidden w-full">
+                                            <h3 className="font-bold text-caption mb-4 text-fg-subtle uppercase tracking-widest text-center">자료실 카테고리 추가</h3>
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
                                                 if(!window.FB || !newCategoryName.trim()) return;
@@ -1861,36 +1903,36 @@
                                                 });
                                                 setNewCategoryName("");
                                             }} className="flex gap-2 w-full">
-                                                <input className="flex-1 min-w-0 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="새 자료실 카테고리명" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} required />
-                                                <button type="submit" className="tap-icon shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95" aria-label="추가"><Icon name="plus" size={20} aria-hidden="true"/></button>
+                                                <input className="flex-1 min-w-0 p-4 bg-surface-2 border-2 border-line rounded-md text-sm font-bold outline-none focus:border-blue-500" placeholder="새 자료실 카테고리명" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} required />
+                                                <button type="submit" className="tap-icon shrink-0 bg-primary text-white px-5 rounded-md font-bold text-sm flex items-center justify-center shadow-md active:scale-95" aria-label="추가"><Icon name="plus" size={20} aria-hidden="true"/></button>
                                             </form>
                                         </div>
-                                        <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
-                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">자료실 탭에 보일 카테고리 목록</div>
+                                        <div className="bg-surface rounded-lg border overflow-hidden shadow-sm">
+                                            <div className="p-4 bg-surface-2 border-b font-bold text-caption text-fg-subtle">자료실 탭에 보일 카테고리 목록</div>
                                             <div className="divide-y max-h-[400px] overflow-y-auto custom-scrollbar">
                                                 {categoriesList.map((item, index) => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center text-left">
                                                         {editingCategoryId === item.id ? (
                                                             <input 
-                                                                className="flex-1 p-2 bg-white border border-blue-500 rounded-lg text-sm font-bold outline-none mr-2 min-w-0"
+                                                                className="flex-1 p-2 bg-surface border border-blue-500 rounded-lg text-sm font-bold outline-none mr-2 min-w-0"
                                                                 value={editingCategoryName}
                                                                 onChange={(e) => setEditingCategoryName(e.target.value)}
                                                             />
                                                         ) : (
-                                                            <span className="font-bold text-sm text-slate-800 break-all">{item.name}</span>
+                                                            <span className="font-bold text-sm text-fg break-all">{item.name}</span>
                                                         )}
                                                         <div className="flex items-center gap-1 shrink-0">
                                                             {editingCategoryId === item.id ? (
                                                                 <>
-                                                                    <button onClick={() => handleUpdateCategory('categories', item, editingCategoryName)} className="tap-icon p-2 text-green-600 hover:bg-green-50 rounded-lg" aria-label="완료 처리"><Icon name="checkCircle" size={16} aria-hidden="true"/></button>
-                                                                    <button onClick={() => setEditingCategoryId(null)} className="tap-icon p-2 text-slate-400 hover:bg-slate-50 rounded-lg" aria-label="닫기"><Icon name="close" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => handleUpdateCategory('categories', item, editingCategoryName)} className="tap-icon p-2 text-success hover:bg-success-soft rounded-lg" aria-label="완료 처리"><Icon name="checkCircle" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => setEditingCategoryId(null)} className="tap-icon p-2 text-fg-subtle hover:bg-surface-2 rounded-lg" aria-label="닫기"><Icon name="close" size={16} aria-hidden="true"/></button>
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <button onClick={() => moveCategory(categoriesList, 'categories', index, -1)} disabled={index === 0} className={`tap-icon p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`} aria-label="위로 이동"><Icon name="arrowUp" size={16} aria-hidden="true"/></button>
-                                                                    <button onClick={() => moveCategory(categoriesList, 'categories', index, 1)} disabled={index === categoriesList.length - 1} className={`tap-icon p-2 rounded-lg transition-colors ${index === categoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`} aria-label="아래로 이동"><Icon name="arrowDown" size={16} aria-hidden="true"/></button>
-                                                                    <button onClick={() => { setEditingCategoryId(item.id); setEditingCategoryName(item.name); }} className="tap-icon p-2 text-slate-400 hover:text-blue-600 ml-1" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
-                                                                    <button onClick={async () => { if (await askConfirm(`분류 "${item.name}"을(를) 삭제하시겠습니까?`)) { await window.FB.deleteDoc(docRef('categories', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-slate-300 hover:text-red-500 ml-1" aria-label="삭제"><Icon name="trash" size={18} aria-hidden="true"/></button>
+                                                                    <button onClick={() => moveCategory(categoriesList, 'categories', index, -1)} disabled={index === 0} className={`tap-icon p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-fg-subtle hover:text-primary hover:bg-primary-soft'}`} aria-label="위로 이동"><Icon name="arrowUp" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => moveCategory(categoriesList, 'categories', index, 1)} disabled={index === categoriesList.length - 1} className={`tap-icon p-2 rounded-lg transition-colors ${index === categoriesList.length - 1 ? 'text-slate-100' : 'text-fg-subtle hover:text-primary hover:bg-primary-soft'}`} aria-label="아래로 이동"><Icon name="arrowDown" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => { setEditingCategoryId(item.id); setEditingCategoryName(item.name); }} className="tap-icon p-2 text-fg-subtle hover:text-primary ml-1" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={async () => { if (await askConfirm(`분류 "${item.name}"을(를) 삭제하시겠습니까?`)) { await window.FB.deleteDoc(docRef('categories', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-fg-subtle hover:text-danger ml-1" aria-label="삭제"><Icon name="trash" size={18} aria-hidden="true"/></button>
                                                                 </>
                                                             )}
                                                         </div>
@@ -1904,8 +1946,8 @@
                                 {/* 영상 분류 관리 탭 */}
                                 {activeTab === 'vidCats' && (
                                     <div className="space-y-4 animate-in fade-in">
-                                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden w-full">
-                                            <h3 className="font-black text-xs mb-4 text-slate-400 uppercase tracking-widest text-center">교육 영상 카테고리 추가</h3>
+                                        <div className="bg-surface p-6 rounded-lg border border-line shadow-sm overflow-hidden w-full">
+                                            <h3 className="font-bold text-caption mb-4 text-fg-subtle uppercase tracking-widest text-center">교육 영상 카테고리 추가</h3>
                                             <form onSubmit={async (e) => {
                                                 e.preventDefault();
                                                 if(!window.FB || !newVideoCategoryName.trim()) return;
@@ -1914,36 +1956,36 @@
                                                 });
                                                 setNewVideoCategoryName("");
                                             }} className="flex gap-2 w-full">
-                                                <input className="flex-1 min-w-0 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="새 교육영상 카테고리명" value={newVideoCategoryName} onChange={e => setNewVideoCategoryName(e.target.value)} required />
-                                                <button type="submit" className="tap-icon shrink-0 bg-blue-600 text-white px-5 rounded-2xl font-black text-sm flex items-center justify-center shadow-md active:scale-95" aria-label="추가"><Icon name="plus" size={20} aria-hidden="true"/></button>
+                                                <input className="flex-1 min-w-0 p-4 bg-surface-2 border-2 border-line rounded-md text-sm font-bold outline-none focus:border-blue-500" placeholder="새 교육영상 카테고리명" value={newVideoCategoryName} onChange={e => setNewVideoCategoryName(e.target.value)} required />
+                                                <button type="submit" className="tap-icon shrink-0 bg-primary text-white px-5 rounded-md font-bold text-sm flex items-center justify-center shadow-md active:scale-95" aria-label="추가"><Icon name="plus" size={20} aria-hidden="true"/></button>
                                             </form>
                                         </div>
-                                        <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
-                                            <div className="p-4 bg-slate-50 border-b font-black text-xs text-slate-400">영상 탭에 보일 카테고리 목록</div>
+                                        <div className="bg-surface rounded-lg border overflow-hidden shadow-sm">
+                                            <div className="p-4 bg-surface-2 border-b font-bold text-caption text-fg-subtle">영상 탭에 보일 카테고리 목록</div>
                                             <div className="divide-y max-h-[400px] overflow-y-auto custom-scrollbar">
                                                 {videoCategoriesList.map((item, index) => (
                                                     <div key={item.id} className="p-4 flex justify-between items-center text-left">
                                                         {editingCategoryId === item.id ? (
                                                             <input 
-                                                                className="flex-1 p-2 bg-white border border-blue-500 rounded-lg text-sm font-bold outline-none mr-2 min-w-0"
+                                                                className="flex-1 p-2 bg-surface border border-blue-500 rounded-lg text-sm font-bold outline-none mr-2 min-w-0"
                                                                 value={editingCategoryName}
                                                                 onChange={(e) => setEditingCategoryName(e.target.value)}
                                                             />
                                                         ) : (
-                                                            <span className="font-bold text-sm text-slate-800 break-all">{item.name}</span>
+                                                            <span className="font-bold text-sm text-fg break-all">{item.name}</span>
                                                         )}
                                                         <div className="flex items-center gap-1 shrink-0">
                                                             {editingCategoryId === item.id ? (
                                                                 <>
-                                                                    <button onClick={() => handleUpdateCategory('videoCategories', item, editingCategoryName)} className="tap-icon p-2 text-green-600 hover:bg-green-50 rounded-lg" aria-label="완료 처리"><Icon name="checkCircle" size={16} aria-hidden="true"/></button>
-                                                                    <button onClick={() => setEditingCategoryId(null)} className="tap-icon p-2 text-slate-400 hover:bg-slate-50 rounded-lg" aria-label="닫기"><Icon name="close" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => handleUpdateCategory('videoCategories', item, editingCategoryName)} className="tap-icon p-2 text-success hover:bg-success-soft rounded-lg" aria-label="완료 처리"><Icon name="checkCircle" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => setEditingCategoryId(null)} className="tap-icon p-2 text-fg-subtle hover:bg-surface-2 rounded-lg" aria-label="닫기"><Icon name="close" size={16} aria-hidden="true"/></button>
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, -1)} disabled={index === 0} className={`tap-icon p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`} aria-label="위로 이동"><Icon name="arrowUp" size={16} aria-hidden="true"/></button>
-                                                                    <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, 1)} disabled={index === videoCategoriesList.length - 1} className={`tap-icon p-2 rounded-lg transition-colors ${index === videoCategoriesList.length - 1 ? 'text-slate-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`} aria-label="아래로 이동"><Icon name="arrowDown" size={16} aria-hidden="true"/></button>
-                                                                    <button onClick={() => { setEditingCategoryId(item.id); setEditingCategoryName(item.name); }} className="tap-icon p-2 text-slate-400 hover:text-blue-600 ml-1" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
-                                                                    <button onClick={async () => { if (await askConfirm(`분류 "${item.name}"을(를) 삭제하시겠습니까?`)) { await window.FB.deleteDoc(docRef('videoCategories', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-slate-300 hover:text-red-500 ml-1" aria-label="삭제"><Icon name="trash" size={18} aria-hidden="true"/></button>
+                                                                    <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, -1)} disabled={index === 0} className={`tap-icon p-2 rounded-lg transition-colors ${index === 0 ? 'text-slate-100' : 'text-fg-subtle hover:text-primary hover:bg-primary-soft'}`} aria-label="위로 이동"><Icon name="arrowUp" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => moveCategory(videoCategoriesList, 'videoCategories', index, 1)} disabled={index === videoCategoriesList.length - 1} className={`tap-icon p-2 rounded-lg transition-colors ${index === videoCategoriesList.length - 1 ? 'text-slate-100' : 'text-fg-subtle hover:text-primary hover:bg-primary-soft'}`} aria-label="아래로 이동"><Icon name="arrowDown" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={() => { setEditingCategoryId(item.id); setEditingCategoryName(item.name); }} className="tap-icon p-2 text-fg-subtle hover:text-primary ml-1" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
+                                                                    <button onClick={async () => { if (await askConfirm(`분류 "${item.name}"을(를) 삭제하시겠습니까?`)) { await window.FB.deleteDoc(docRef('videoCategories', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-fg-subtle hover:text-danger ml-1" aria-label="삭제"><Icon name="trash" size={18} aria-hidden="true"/></button>
                                                                 </>
                                                             )}
                                                         </div>
@@ -1956,13 +1998,13 @@
 
                                 {/* 자료 및 영상 등록 탭 */}
                                 {(activeTab === 'materials' || activeTab === 'videos') && (
-                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center sm:text-left">
-                                        <h3 className="font-black text-xs mb-6 text-slate-400 uppercase tracking-widest text-center">{editingId ? "수정 모드" : "새 콘텐츠 업로드"}</h3>
+                                    <div className="bg-surface p-6 rounded-lg border border-line shadow-sm text-center sm:text-left">
+                                        <h3 className="font-bold text-caption mb-6 text-fg-subtle uppercase tracking-widest text-center">{editingId ? "수정 모드" : "새 콘텐츠 업로드"}</h3>
                                         <form onSubmit={handleSaveContent} className="space-y-4 text-center">
                                             <div className="text-left space-y-2">
-                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">썸네일 이미지 (선택)</label>
+                                                <label className="text-caption font-bold text-fg-muted uppercase tracking-widest">썸네일 이미지 (선택)</label>
                                                 <div className="flex items-center gap-3">
-                                                    <label className="flex-1 cursor-pointer bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors text-slate-500 text-sm font-bold min-w-0">
+                                                    <label className="flex-1 cursor-pointer bg-surface-2 border-2 border-line rounded-md p-4 flex items-center justify-center gap-2 hover:bg-surface-2 transition-colors text-fg-muted text-sm font-bold min-w-0">
                                                         <Icon name="image" size={18} className="shrink-0"/>
                                                         <span className="truncate">이미지 첨부하기</span>
                                                         <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
@@ -1970,56 +2012,56 @@
                                                     {formState.thumbnail && (
                                                         <div className="relative shrink-0">
                                                             <img src={formState.thumbnail} className="h-14 w-14 object-cover rounded-xl border shadow-sm" alt="thumbnail" />
-                                                            <button type="button" onClick={() => setFormState(p => ({...p, thumbnail: ""}))} className="tap-icon absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm" aria-label="삭제"><Icon name="trash" size={12} aria-hidden="true"/></button>
+                                                            <button type="button" onClick={() => setFormState(p => ({...p, thumbnail: ""}))} className="tap-icon absolute -top-2 -right-2 bg-danger text-white rounded-full p-1 shadow-sm" aria-label="삭제"><Icon name="trash" size={12} aria-hidden="true"/></button>
                                                         </div>
                                                     )}
                                                 </div>
                                             </div>
 
-                                            <input className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-blue-500" placeholder="자료/영상 제목" value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} required />
+                                            <input className="w-full p-4 bg-surface-2 border-2 border-line rounded-md text-sm font-bold outline-none focus:border-blue-500" placeholder="자료/영상 제목" value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} required />
                                             
                                             {activeTab === 'materials' ? (
-                                                <select className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-center outline-none focus:border-blue-500" value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} required>
+                                                <select className="w-full p-4 bg-surface-2 border-2 border-line rounded-md text-sm font-bold text-center outline-none focus:border-blue-500" value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} required>
                                                     <option value="" disabled hidden>-- 자료 카테고리 선택 --</option>
                                                     {categoriesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                                 </select>
                                             ) : (
-                                                <select className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-center outline-none focus:border-blue-500" value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} required>
+                                                <select className="w-full p-4 bg-surface-2 border-2 border-line rounded-md text-sm font-bold text-center outline-none focus:border-blue-500" value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} required>
                                                     <option value="" disabled hidden>-- 영상 카테고리 선택 --</option>
                                                     {videoCategoriesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                                 </select>
                                             )}
 
-                                            <textarea className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-medium h-24 outline-none focus:border-blue-500 text-left" placeholder="상세 설명 (선택)" value={formState.description} onChange={e => setFormState({...formState, description: e.target.value})} />
+                                            <textarea className="w-full p-4 bg-surface-2 border-2 border-line rounded-md text-sm font-medium h-24 outline-none focus:border-blue-500 text-left" placeholder="상세 설명 (선택)" value={formState.description} onChange={e => setFormState({...formState, description: e.target.value})} />
                                             
                                             {activeTab === "materials" ? (
                                                 <div className="grid grid-cols-1 gap-2">
-                                                    <input className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-[10px] font-mono outline-none focus:border-blue-500" placeholder="PDF 구글드라이브 링크" value={formState.pdfUrl} onChange={e => setFormState({...formState, pdfUrl: e.target.value})} />
-                                                    <input className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-[10px] font-mono outline-none focus:border-blue-500" placeholder="PPT 구글드라이브 링크" value={formState.pptUrl} onChange={e => setFormState({...formState, pptUrl: e.target.value})} />
+                                                    <input className="w-full p-3 bg-surface-2 border-2 border-line rounded-xl text-caption font-mono outline-none focus:border-blue-500" placeholder="PDF 구글드라이브 링크" value={formState.pdfUrl} onChange={e => setFormState({...formState, pdfUrl: e.target.value})} />
+                                                    <input className="w-full p-3 bg-surface-2 border-2 border-line rounded-xl text-caption font-mono outline-none focus:border-blue-500" placeholder="PPT 구글드라이브 링크" value={formState.pptUrl} onChange={e => setFormState({...formState, pptUrl: e.target.value})} />
                                                 </div>
                                             ) : (
-                                                <input className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[10px] font-mono outline-none focus:border-blue-500" placeholder="YouTube URL" value={formState.youtubeUrl} onChange={e => setFormState({...formState, youtubeUrl: e.target.value})} required />
+                                                <input className="w-full p-4 bg-surface-2 border-2 border-line rounded-md text-caption font-mono outline-none focus:border-blue-500" placeholder="YouTube URL" value={formState.youtubeUrl} onChange={e => setFormState({...formState, youtubeUrl: e.target.value})} required />
                                             )}
 
                                             <div className="flex gap-2 pt-2">
-                                                <button type="submit" className="flex-1 bg-blue-600 text-white font-black py-4 rounded-2xl text-sm shadow-lg flex items-center justify-center gap-2 hover:bg-blue-700 transition-all"><Icon name="save" size={18}/> {editingId ? "수정 저장" : "새로 등록"}</button>
-                                                {editingId && <button type="button" onClick={() => {setEditingId(null); setFormState({title: "", category: "", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "", thumbnail: ""});}} className="px-8 bg-slate-100 text-slate-500 font-black rounded-2xl text-sm hover:bg-slate-200 transition-all">취소</button>}
+                                                <button type="submit" className="flex-1 bg-primary text-white font-bold py-4 rounded-md text-sm shadow-lg flex items-center justify-center gap-2 hover:bg-primary-hover transition-all"><Icon name="save" size={18}/> {editingId ? "수정 저장" : "새로 등록"}</button>
+                                                {editingId && <button type="button" onClick={() => {setEditingId(null); setFormState({title: "", category: "", description: "", pdfUrl: "", pptUrl: "", youtubeUrl: "", thumbnail: ""});}} className="px-8 bg-surface-2 text-fg-muted font-bold rounded-md text-sm hover:bg-line transition-all">취소</button>}
                                             </div>
                                         </form>
 
                                         <div className="mt-8 border-t pt-4">
-                                            <div className="font-black text-xs text-slate-400 mb-4 text-center">등록된 항목 관리</div>
+                                            <div className="font-bold text-caption text-fg-subtle mb-4 text-center">등록된 항목 관리</div>
                                             <div className="divide-y max-h-[300px] overflow-y-auto custom-scrollbar">
                                                 {(activeTab === 'videos' ? messages.filter(m => m.isVideo || m.youtubeUrl) : messages.filter(m => !m.isVideo && m.category !== '제품 브로슈어' && !m.youtubeUrl)).map(item => (
                                                     <div key={item.id} className="py-3 flex justify-between items-center text-left gap-3">
                                                         {item.thumbnail && <img src={item.thumbnail} className="w-10 h-10 object-cover rounded-lg shadow-sm shrink-0" alt="thumb"/>}
                                                         <div className="flex-1 min-w-0 pr-2">
-                                                            <span className="text-[9px] font-black text-blue-400 uppercase">{item.category}</span>
-                                                            <p className="font-black text-slate-800 text-xs line-clamp-1">{item.title}</p>
+                                                            <span className="text-caption font-bold text-primary uppercase">{item.category}</span>
+                                                            <p className="font-bold text-fg text-caption line-clamp-1">{item.title}</p>
                                                         </div>
                                                         <div className="flex gap-1 shrink-0">
-                                                            <button onClick={() => { setEditingId(item.id); setFormState({title: item.title||"", category: item.category||"", description: item.description||"", pdfUrl: item.pdfUrl||"", pptUrl: item.pptUrl||"", youtubeUrl: item.youtubeUrl||"", thumbnail: item.thumbnail||""}); window.scrollTo(0,0); }} className="tap-icon p-2 text-slate-400 hover:text-blue-600" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
-                                                            <button onClick={async () => { if (await askConfirm(`"${item.title}" 항목을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) { await window.FB.deleteDoc(docRef('messages', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-slate-400 hover:text-red-500" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
+                                                            <button onClick={() => { setEditingId(item.id); setFormState({title: item.title||"", category: item.category||"", description: item.description||"", pdfUrl: item.pdfUrl||"", pptUrl: item.pptUrl||"", youtubeUrl: item.youtubeUrl||"", thumbnail: item.thumbnail||""}); window.scrollTo(0,0); }} className="tap-icon p-2 text-fg-subtle hover:text-primary" aria-label="수정"><Icon name="edit" size={16} aria-hidden="true"/></button>
+                                                            <button onClick={async () => { if (await askConfirm(`"${item.title}" 항목을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) { await window.FB.deleteDoc(docRef('messages', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-fg-subtle hover:text-danger" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -2030,16 +2072,16 @@
 
                                 {/* 실시간 로그 탭 */}
                                 {activeTab === 'logs' && (
-                                    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm animate-in fade-in">
-                                        <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                                            <span className="font-black text-xs text-slate-400 uppercase tracking-widest">최근 접속/활동 로그</span>
-                                            <button onClick={fetchRecentLogs} className="bg-blue-100 text-blue-600 px-3 py-1.5 rounded-xl flex items-center gap-1 text-[10px] font-black active:scale-95 transition-transform"><Icon name="refresh" size={14}/> 새로고침</button>
+                                    <div className="bg-surface rounded-lg border overflow-hidden shadow-sm animate-in fade-in">
+                                        <div className="p-4 bg-surface-2 border-b flex justify-between items-center">
+                                            <span className="font-bold text-caption text-fg-subtle uppercase tracking-widest">최근 접속/활동 로그</span>
+                                            <button onClick={fetchRecentLogs} className="bg-blue-100 text-primary px-3 py-1.5 rounded-xl flex items-center gap-1 text-caption font-bold active:scale-95 transition-transform"><Icon name="refresh" size={14}/> 새로고침</button>
                                         </div>
-                                        <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar bg-slate-900 text-green-400 font-mono text-xs p-4 space-y-2">
-                                            {recentLogs.length === 0 ? <p className="text-slate-500 italic text-center py-10">로그 데이터가 없습니다.</p> : recentLogs.map(log => (
+                                        <div className="divide-y max-h-[600px] overflow-y-auto custom-scrollbar bg-slate-900 text-green-400 font-mono text-caption p-4 space-y-2">
+                                            {recentLogs.length === 0 ? <p className="text-fg-muted italic text-center py-10">로그 데이터가 없습니다.</p> : recentLogs.map(log => (
                                                 <div key={log.id} className="pb-2 border-b border-slate-800">
-                                                    <span className="text-slate-500 text-[10px]">[{log.dateString}]</span> <br/>
-                                                    <span className="text-blue-400 font-bold">MR_{log.empId}</span> | {log.action} : {log.target}
+                                                    <span className="text-fg-muted text-caption">[{log.dateString}]</span> <br/>
+                                                    <span className="text-primary font-bold">MR_{log.empId}</span> | {log.action} : {log.target}
                                                 </div>
                                             ))}
                                         </div>
@@ -2686,10 +2728,10 @@
                     {/* Admin Auth Modal (비밀번호 힌트 제거) */}
                     {showAdminLogin && (
                         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 text-center">
-                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-200 text-center">
+                            <div className="bg-surface w-full max-w-sm rounded-lg p-10 shadow-2xl animate-in zoom-in duration-200 text-center">
                                 <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-bold flex items-center gap-2"><Icon name="lock" size={24} className="text-blue-600" /> PM 관리자 인증</h2>
-                                    <button onClick={() => setShowAdminLogin(false)} className="tap-icon text-slate-400 hover:text-slate-600" aria-label="닫기"><Icon name="close" size={24}  aria-hidden="true"/></button>
+                                    <h2 className="text-xl font-bold flex items-center gap-2"><Icon name="lock" size={24} className="text-primary" /> PM 관리자 인증</h2>
+                                    <button onClick={() => setShowAdminLogin(false)} className="tap-icon text-fg-subtle hover:text-fg-muted" aria-label="닫기"><Icon name="close" size={24}  aria-hidden="true"/></button>
                                 </div>
                                 <form onSubmit={(e) => {
                                     e.preventDefault();
@@ -2701,9 +2743,9 @@
                                     }
                                     else toast("관리자 비밀번호가 일치하지 않습니다.", "error");
                                 }} className="space-y-4 text-center">
-                                    <p className="text-xs text-slate-500 font-bold mb-4">관리자 전용 비밀번호를 입력하세요.</p>
-                                    <input type="password" autoFocus className="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-center text-xl tracking-widest" placeholder="비밀번호 입력" value={adminPasswordInput} onChange={e => setAdminPasswordInput(e.target.value)} />
-                                    <button className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-colors text-center">로그인</button>
+                                    <p className="text-caption text-fg-muted font-bold mb-4">관리자 전용 비밀번호를 입력하세요.</p>
+                                    <input type="password" autoFocus className="w-full p-4 bg-surface-2 border rounded-md outline-none focus:ring-2 focus:ring-blue-500 text-center text-xl tracking-widest" placeholder="비밀번호 입력" value={adminPasswordInput} onChange={e => setAdminPasswordInput(e.target.value)} />
+                                    <button className="w-full bg-slate-900 text-white py-4 rounded-md font-bold hover:bg-slate-800 transition-colors text-center">로그인</button>
                                 </form>
                             </div>
                         </div>
