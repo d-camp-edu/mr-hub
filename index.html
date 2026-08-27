@@ -391,6 +391,66 @@
             };
         };
 
+        // ═══════════ 폼 공용 컴포넌트 ═══════════
+        // 라벨을 항상 노출하고(placeholder 단독 금지), 터치 높이를 보장한다.
+        const Field = ({ id, label, required, hint, children }) => (
+            <div className="text-left">
+                <label htmlFor={id} className="block text-label font-medium text-fg mb-2">
+                    {label}{required && <span className="text-danger ml-1" aria-hidden="true">*</span>}
+                    {required && <span className="sr-only">(필수)</span>}
+                </label>
+                {children}
+                {hint && <p className="text-caption text-fg-muted mt-1.5">{hint}</p>}
+            </div>
+        );
+
+        const inputCls = "w-full px-4 rounded-md bg-surface border border-line text-fg";
+        const inputStyle = { minHeight: 'var(--input-h)' };
+
+        const TextField = ({ id, label, required, hint, value, onChange, ...rest }) => (
+            <Field id={id} label={label} required={required} hint={hint}>
+                <input id={id} value={value} onChange={onChange} required={required}
+                       className={inputCls} style={inputStyle} {...rest} />
+            </Field>
+        );
+
+        // 섹션 제목 — 번호로 단계를 나타내고 색으로 구분하지 않는다
+        const FormSection = ({ step, title, children }) => (
+            <fieldset className="rounded-md border border-line bg-surface-2 p-4 space-y-3">
+                <legend className="flex items-center gap-2 px-2">
+                    {step && (
+                        <span className="w-6 h-6 rounded-full bg-primary text-on-primary text-caption font-bold flex items-center justify-center">
+                            {step}
+                        </span>
+                    )}
+                    <span className="text-label font-bold text-fg">{title}</span>
+                </legend>
+                {children}
+            </fieldset>
+        );
+
+        // 상태 배지 — 색만으로 구분하지 않도록 아이콘 + 텍스트 동반
+        const StatusBadge = ({ done, doneLabel = "처리 완료", waitLabel = "대기 중" }) => (
+            <span className={`inline-flex items-center gap-1 shrink-0 text-caption font-bold px-2 py-1 rounded-sm whitespace-nowrap ${
+                    done ? 'bg-success-soft text-success' : 'bg-surface-2 text-fg-muted'}`}>
+                <Icon name={done ? 'checkCircle' : 'circle'} size={12} aria-hidden="true" />
+                {done ? doneLabel : waitLabel}
+            </span>
+        );
+
+        // 카드 껍데기
+        const Card = ({ title, icon, children, className = "" }) => (
+            <section className={`bg-surface rounded-lg border border-line p-5 sm:p-6 shadow-card ${className}`}>
+                {title && (
+                    <h2 className="text-title font-bold text-fg mb-5 flex items-center gap-2">
+                        {icon && <Icon name={icon} size={20} className="text-primary" aria-hidden="true" />}
+                        {title}
+                    </h2>
+                )}
+                {children}
+            </section>
+        );
+
         const App = () => {
             const [user, setUser] = useState(null);
             
@@ -445,6 +505,59 @@
             const [sympForm, setSympForm] = useState({ symposiumName: "", division: "", team: "", name: "", phone: "", accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorName: "", doctorPhone: "", memo: "" });
 
             const [photoForm, setPhotoForm] = useState({ division: "", team: "", name: "", photoBase64: "" });
+
+            // ===== 내 정보 (사업부·팀·이름·연락처를 4개 폼에서 재입력하던 것 제거) =====
+            const profileKey = (id) => `mr_profile_${id}`;
+            const [myProfile, setMyProfile] = useState({ division: "", team: "", name: "", phone: "" });
+
+            // 로그인한 사번의 저장된 정보 불러오기
+            useEffect(() => {
+                if (!empId) return;
+                try {
+                    const saved = JSON.parse(localStorage.getItem(profileKey(empId)) || "null");
+                    if (saved) setMyProfile(p => ({ ...p, ...saved }));
+                } catch (e) { /* 손상된 값은 무시 */ }
+            }, [empId]);
+
+            // 사업부명은 선택한 사업부로 기본 채움 (비어 있을 때만)
+            useEffect(() => {
+                if (currentDivision && !myProfile.division) {
+                    setMyProfile(p => ({ ...p, division: currentDivision.label }));
+                }
+            }, [currentDivision, myProfile.division]);
+
+            const saveProfile = useCallback((patch) => {
+                setMyProfile(prev => {
+                    const next = { ...prev, ...patch };
+                    if (empId) {
+                        try { localStorage.setItem(profileKey(empId), JSON.stringify(next)); } catch (e) {}
+                    }
+                    return next;
+                });
+            }, [empId]);
+
+            // 폼에 내 정보를 흘려넣는다 (사용자가 이미 입력한 값은 건드리지 않음)
+            const withProfile = useCallback((form) => ({
+                ...form,
+                division: form.division || myProfile.division,
+                team:     form.team     || myProfile.team,
+                name:     form.name     || myProfile.name,
+                ...(('phone' in form) ? { phone: form.phone || myProfile.phone } : {})
+            }), [myProfile]);
+
+            // 내 정보가 준비되면 아직 비어 있는 폼 칸을 채운다
+            useEffect(() => {
+                if (!myProfile.division && !myProfile.team && !myProfile.name && !myProfile.phone) return;
+                setPhotoForm(f => withProfile(f));
+                setForm301Info(f => withProfile(f));
+                setSympForm(f => withProfile(f));
+                setInquiryForm(f => withProfile(f));
+                setRequestForm(f => ({
+                    ...f,
+                    requesterName: f.requesterName || myProfile.name,
+                    phone: f.phone || myProfile.phone
+                }));
+            }, [myProfile, withProfile]);
 
             // 자료실 정렬/로딩 상태
             const [sortBy, setSortBy] = useState("recent");   // recent | name | popular
@@ -742,8 +855,9 @@
                     ...photoForm, empId, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR')
                 });
                 logAction("인증사진 업로드", `${photoForm.division} ${photoForm.name}`);
+                saveProfile({ division: photoForm.division, team: photoForm.team, name: photoForm.name });
                 toast("인증 사진이 성공적으로 업로드되었습니다.", "success");
-                setPhotoForm({ division: "", team: "", name: "", photoBase64: "" });
+                setPhotoForm(f => ({ ...f, photoBase64: "" }));
             };
 
             const submitBrochure = async (e) => {
@@ -751,8 +865,9 @@
                 if (!user || !window.FB) return;
                 await window.FB.addDoc(colRef('requests'), { ...requestForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
                 logAction("브로슈어 신청", requestForm.brochureName);
+                saveProfile({ name: requestForm.requesterName, phone: requestForm.phone });
                 toast("신청이 완료되었습니다.", "success");
-                setRequestForm({ brochureName: "", requesterName: "", phone: "", office: "", quantity: "", accountName: "", accountCode: "" });
+                setRequestForm(f => ({ ...f, brochureName: "", quantity: "", accountName: "", accountCode: "" }));
             };
 
             const add301Account = () => {
@@ -774,9 +889,10 @@
                         })
                     ));
                     logAction("301 설명회 신청", `[${form301Info.title}] ${local301List.length}건 등록`);
+                    saveProfile({ division: form301Info.division, team: form301Info.team, name: form301Info.name, phone: form301Info.phone });
                     toast("301 다기관 설명회 신청이 완료되었습니다.", "success");
                     setLocal301List([]);
-                    setForm301Info({ title: "", date: "", location: "", division: "", team: "", name: "", phone: "" });
+                    setForm301Info(f => ({ ...f, title: "", date: "", location: "" }));
                 } catch(e) { toast("오류 발생", "error"); }
             };
 
@@ -785,8 +901,9 @@
                 if (!user || !window.FB) return;
                 await window.FB.addDoc(colRef('symposium_requests'), { ...sympForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
                 logAction("심포지엄 모객", sympForm.symposiumName);
+                saveProfile({ division: sympForm.division, team: sympForm.team, name: sympForm.name, phone: sympForm.phone });
                 toast("모객 리스트에 등록되었습니다.", "success");
-                setSympForm({ symposiumName: "", division: "", team: "", name: "", phone: "", accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorName: "", doctorPhone: "", memo: "" });
+                setSympForm(f => ({ ...f, symposiumName: "", accountName: "", accountCode: "", targetProduct: "자누비아", rxAmount: "", doctorName: "", doctorPhone: "", memo: "" }));
             };
 
             const submitInquiry = async (e) => {
@@ -794,8 +911,9 @@
                 if (!user || !window.FB) return;
                 await window.FB.addDoc(colRef('inquiries'), { ...inquiryForm, empId, completed: false, timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR') });
                 logAction("문의/건의 등록", inquiryForm.division);
+                saveProfile({ division: inquiryForm.division, team: inquiryForm.team, name: inquiryForm.name });
                 toast("성공적으로 접수되었습니다.", "success");
-                setInquiryForm({ division: "", team: "", name: "", content: "" });
+                setInquiryForm(f => ({ ...f, content: "" }));
             };
 
             const handleImageUpload = (e) => {
@@ -1934,254 +2052,423 @@
                                 
                                 {/* 인증사진 (홈) */}
                                 {activeTab === 'home' && (
-                                    <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                                        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><Icon name="camera" size={32}/></div>
-                                        <h2 className="text-xl font-black text-slate-800 mb-2">현장 브로슈어 활용 인증</h2>
-                                        <p className="text-xs text-slate-500 mb-6">원내에 브로슈어를 비치한 사진을 찍어 올려주세요!</p>
-                                        
+                                    <Card title="현장 브로슈어 활용 인증" icon="camera">
+                                        <p className="text-label text-fg-muted -mt-3 mb-5 text-left">
+                                            원내에 브로슈어를 비치한 사진을 찍어 올려주세요.
+                                        </p>
+
                                         <form onSubmit={submitPhoto} className="space-y-4">
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-blue-500" placeholder="사업부명" value={photoForm.division} onChange={e=>setPhotoForm({...photoForm, division: e.target.value})} required/>
-                                                <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-blue-500" placeholder="팀명" value={photoForm.team} onChange={e=>setPhotoForm({...photoForm, team: e.target.value})} required/>
-                                            </div>
-                                            <input className="w-full p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-blue-500" placeholder="담당자명" value={photoForm.name} onChange={e=>setPhotoForm({...photoForm, name: e.target.value})} required/>
-                                            
-                                            <label className="block w-full p-6 bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors">
-                                                <div className="flex flex-col items-center justify-center gap-2 text-slate-500">
-                                                    <Icon name="image" size={32} />
-                                                    <span className="text-sm font-bold">{photoForm.photoBase64 ? "사진 첨부 완료 (클릭하여 변경)" : "여기를 눌러 사진 촬영/첨부"}</span>
+                                            <FormSection step="1" title="담당자 정보">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <TextField id="ph-div" label="사업부명" required
+                                                               value={photoForm.division}
+                                                               onChange={e=>setPhotoForm({...photoForm, division: e.target.value})} />
+                                                    <TextField id="ph-team" label="팀명" required
+                                                               value={photoForm.team}
+                                                               onChange={e=>setPhotoForm({...photoForm, team: e.target.value})} />
                                                 </div>
-                                                <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
-                                            </label>
-                                            {photoForm.photoBase64 && <img src={photoForm.photoBase64} className="w-full h-48 object-cover rounded-xl shadow-sm border" alt="preview" />}
-                                            
-                                            <button className="w-full bg-blue-600 text-white py-4 rounded-xl font-black active:scale-95 shadow-lg shadow-blue-100 mt-2"><Icon name="save" size={18} className="inline mr-1 mb-0.5"/> 사진 인증하기</button>
+                                                <TextField id="ph-name" label="담당자명" required autoComplete="name"
+                                                           value={photoForm.name}
+                                                           onChange={e=>setPhotoForm({...photoForm, name: e.target.value})} />
+                                            </FormSection>
+
+                                            <FormSection step="2" title="사진 첨부">
+                                                <label className="block w-full p-6 rounded-md bg-surface border-2 border-dashed border-line cursor-pointer hover:border-primary hover:bg-primary-soft transition-colors">
+                                                    <div className="flex flex-col items-center justify-center gap-2 text-fg-muted">
+                                                        <Icon name="camera" size={28} aria-hidden="true" />
+                                                        <span className="text-label font-medium">
+                                                            {photoForm.photoBase64 ? "사진 첨부됨 · 눌러서 변경" : "눌러서 촬영하거나 사진을 선택하세요"}
+                                                        </span>
+                                                    </div>
+                                                    <input type="file" accept="image/*" capture="environment"
+                                                           onChange={handlePhotoUpload} className="sr-only" />
+                                                </label>
+
+                                                {photoForm.photoBase64 && (
+                                                    <div className="relative">
+                                                        <img src={photoForm.photoBase64} alt="첨부한 사진 미리보기"
+                                                             className="w-full rounded-md border border-line object-cover"
+                                                             style={{ aspectRatio: '4 / 3' }} />
+                                                        <button type="button" aria-label="사진 제거"
+                                                                onClick={() => setPhotoForm(p => ({...p, photoBase64: ""}))}
+                                                                className="tap-icon absolute top-2 right-2 rounded-md bg-surface/90 text-danger shadow-card hover:bg-danger-soft">
+                                                            <Icon name="trash" size={16} aria-hidden="true" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </FormSection>
+
+                                            <button className="w-full rounded-md bg-primary text-on-primary font-bold text-label inline-flex items-center justify-center gap-2 hover:bg-primary-hover transition-colors"
+                                                    style={{ minHeight: 'var(--btn-h)' }}>
+                                                <Icon name="save" size={18} aria-hidden="true" /> 사진 인증하기
+                                            </button>
                                         </form>
-                                    </div>
+                                    </Card>
                                 )}
 
                                 {activeTab === 'brochures' && (
-                                    <div className="space-y-6">
-                                        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                                            <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center justify-center gap-2"><Icon name="cart" size={24} className="text-blue-600"/> 브로슈어 신청</h2>
-                                            <form onSubmit={submitBrochure} className="space-y-3">
-                                                <select className="w-full p-4 bg-slate-50 border-2 rounded-xl text-sm font-bold outline-none focus:border-blue-500 text-center appearance-none" value={requestForm.brochureName} onChange={e=>setRequestForm({...requestForm, brochureName: e.target.value})} required>
-                                                    <option value="" disabled hidden>-- 브로슈어 품목 선택 --</option>
-                                                    {messages.filter(m=>m.category==="제품 브로슈어").map(m=><option key={m.id} value={m.title}>{m.title}</option>)}
-                                                </select>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center w-full min-w-0" placeholder="거래처명" value={requestForm.accountName} onChange={e=>setRequestForm({...requestForm, accountName: e.target.value})} required/>
-                                                    <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center w-full min-w-0" placeholder="거래처코드" value={requestForm.accountCode} onChange={e=>setRequestForm({...requestForm, accountCode: e.target.value})} required/>
-                                                    <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center w-full min-w-0" placeholder="신청자명" value={requestForm.requesterName} onChange={e=>setRequestForm({...requestForm, requesterName: e.target.value})} required/>
-                                                    <input type="number" className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center w-full min-w-0" placeholder="수량(부)" value={requestForm.quantity} onChange={e=>setRequestForm({...requestForm, quantity: e.target.value})} required/>
-                                                </div>
-                                                <input className="w-full p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center" placeholder="연락처 (필수)" value={requestForm.phone} onChange={e=>setRequestForm({...requestForm, phone: e.target.value})} required/>
-                                                <input className="w-full p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center" placeholder="수령 사무소명" value={requestForm.office} onChange={e=>setRequestForm({...requestForm, office: e.target.value})} required/>
-                                                <button className="w-full bg-blue-600 text-white py-4 rounded-xl font-black flex items-center justify-center gap-2"><Icon name="save" size={18}/> 신청하기</button>
+                                    <div className="space-y-4">
+                                        <Card title="브로슈어 신청" icon="cart">
+                                            <form onSubmit={submitBrochure} className="space-y-4">
+                                                <Field id="br-item" label="브로슈어 품목" required>
+                                                    <select id="br-item" required className={inputCls} style={inputStyle}
+                                                            value={requestForm.brochureName}
+                                                            onChange={e=>setRequestForm({...requestForm, brochureName: e.target.value})}>
+                                                        <option value="" disabled hidden>품목을 선택하세요</option>
+                                                        {messages.filter(m=>m.category==="제품 브로슈어").map(m=>(
+                                                            <option key={m.id} value={m.title}>{m.title}</option>
+                                                        ))}
+                                                    </select>
+                                                </Field>
+
+                                                <FormSection step="1" title="거래처 정보">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <TextField id="br-acc" label="거래처명" required
+                                                                   value={requestForm.accountName}
+                                                                   onChange={e=>setRequestForm({...requestForm, accountName: e.target.value})} />
+                                                        <TextField id="br-code" label="거래처코드" required
+                                                                   value={requestForm.accountCode}
+                                                                   onChange={e=>setRequestForm({...requestForm, accountCode: e.target.value})} />
+                                                    </div>
+                                                    <TextField id="br-qty" label="수량" required type="number" inputMode="numeric"
+                                                               min="1" hint="부 단위로 입력하세요"
+                                                               value={requestForm.quantity}
+                                                               onChange={e=>setRequestForm({...requestForm, quantity: e.target.value})} />
+                                                </FormSection>
+
+                                                <FormSection step="2" title="신청자 · 수령 정보">
+                                                    <TextField id="br-name" label="신청자명" required autoComplete="name"
+                                                               value={requestForm.requesterName}
+                                                               onChange={e=>setRequestForm({...requestForm, requesterName: e.target.value})} />
+                                                    <TextField id="br-phone" label="연락처" required type="tel" inputMode="tel"
+                                                               autoComplete="tel"
+                                                               value={requestForm.phone}
+                                                               onChange={e=>setRequestForm({...requestForm, phone: e.target.value})} />
+                                                    <TextField id="br-office" label="수령 사무소명" required
+                                                               value={requestForm.office}
+                                                               onChange={e=>setRequestForm({...requestForm, office: e.target.value})} />
+                                                </FormSection>
+
+                                                <button className="w-full rounded-md bg-primary text-on-primary font-bold text-label inline-flex items-center justify-center gap-2 hover:bg-primary-hover transition-colors"
+                                                        style={{ minHeight: 'var(--btn-h)' }}>
+                                                    <Icon name="save" size={18} aria-hidden="true" /> 신청하기
+                                                </button>
                                             </form>
-                                        </div>
-                                        
-                                        <div className="bg-white rounded-[2rem] border p-4 shadow-sm">
-                                            <h3 className="font-black text-sm text-slate-600 mb-3 text-center">나의 브로슈어 배송 현황</h3>
-                                            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                        </Card>
+
+                                        <Card title="나의 배송 현황">
+                                            <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
                                                 {requests.filter(r => r.empId === empId).map(req => (
-                                                    <div key={req.id} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center border">
-                                                        <div className="text-left">
-                                                            <p className="text-xs font-bold text-slate-800 line-clamp-1">{req.brochureName} ({req.quantity}부)</p>
-                                                            <p className="text-[10px] text-slate-500">{req.dateString.slice(0, 11)}</p>
+                                                    <div key={req.id} className="p-3 rounded-md bg-surface-2 border border-line flex justify-between items-center gap-3">
+                                                        <div className="text-left min-w-0">
+                                                            <p className="text-label font-bold text-fg line-clamp-1">
+                                                                {req.brochureName} <span className="font-medium text-fg-muted">({req.quantity}부)</span>
+                                                            </p>
+                                                            <p className="text-caption text-fg-muted mt-0.5">{req.dateString}</p>
                                                         </div>
-                                                        <span className={`text-[10px] font-black px-2 py-1 rounded-full whitespace-nowrap ${req.completed ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>
-                                                            {req.completed ? '배송 완료' : '준비 중'}
-                                                        </span>
+                                                        <StatusBadge done={req.completed} doneLabel="배송 완료" waitLabel="준비 중" />
                                                     </div>
                                                 ))}
-                                                {requests.filter(r => r.empId === empId).length === 0 && <p className="text-xs text-slate-400 text-center py-4">신청 내역이 없습니다.</p>}
+                                                {requests.filter(r => r.empId === empId).length === 0 && (
+                                                    <p className="text-label text-fg-muted text-center py-8">신청 내역이 없습니다.</p>
+                                                )}
                                             </div>
-                                        </div>
+                                        </Card>
                                     </div>
                                 )}
 
                                 {activeTab === '301' && (
-                                    <div className="space-y-6">
-                                        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                                            <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center justify-center gap-2"><Icon name="users" size={24} className="text-orange-500"/> 301 다기관 설명회 신청</h2>
-                                            
-                                            <div className="bg-orange-50 p-4 rounded-2xl mb-6 space-y-3">
-                                                <p className="text-xs font-bold text-orange-700 text-left">1. 기본 정보 입력</p>
-                                                <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="설명회 제목 (예: 서울 강남권 301 설명회)" value={form301Info.title} onChange={e=>setForm301Info({...form301Info, title: e.target.value})}/>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                    <input type="date" className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" value={form301Info.date} onChange={e=>setForm301Info({...form301Info, date: e.target.value})}/>
-                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center" placeholder="진행 장소" value={form301Info.location} onChange={e=>setForm301Info({...form301Info, location: e.target.value})}/>
-                                                </div>
-                                            </div>
-                                            
-                                            <div className="bg-blue-50 p-4 rounded-2xl mb-6 space-y-3">
-                                                <p className="text-xs font-bold text-blue-700 text-left">2. 담당자 정보 입력</p>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0" placeholder="사업부명" value={form301Info.division} onChange={e=>setForm301Info({...form301Info, division: e.target.value})}/>
-                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0" placeholder="팀명" value={form301Info.team} onChange={e=>setForm301Info({...form301Info, team: e.target.value})}/>
-                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0" placeholder="담당자명" value={form301Info.name} onChange={e=>setForm301Info({...form301Info, name: e.target.value})}/>
-                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0" placeholder="연락처" value={form301Info.phone} onChange={e=>setForm301Info({...form301Info, phone: e.target.value})}/>
-                                                </div>
-                                            </div>
+                                    <div className="space-y-4">
+                                        <Card title="301 다기관 설명회 신청" icon="users">
+                                            <div className="space-y-4">
+                                                <FormSection step="1" title="설명회 기본 정보">
+                                                    <TextField id="r3-title" label="설명회 제목" required
+                                                               hint="예: 서울 강남권 301 설명회"
+                                                               value={form301Info.title}
+                                                               onChange={e=>setForm301Info({...form301Info, title: e.target.value})} />
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        <TextField id="r3-date" label="진행 날짜" required type="date"
+                                                                   value={form301Info.date}
+                                                                   onChange={e=>setForm301Info({...form301Info, date: e.target.value})} />
+                                                        <TextField id="r3-loc" label="진행 장소" required
+                                                                   value={form301Info.location}
+                                                                   onChange={e=>setForm301Info({...form301Info, location: e.target.value})} />
+                                                    </div>
+                                                </FormSection>
 
-                                            <div className="bg-slate-50 p-4 rounded-2xl mb-6 space-y-3 border">
-                                                <p className="text-xs font-bold text-slate-700 text-left">3. 거래처 리스트 추가</p>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0" placeholder="거래처명" value={form301Account.accountName} onChange={e=>setForm301Account({...form301Account, accountName: e.target.value})}/>
-                                                    <input className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0" placeholder="코드" value={form301Account.accountCode} onChange={e=>setForm301Account({...form301Account, accountCode: e.target.value})}/>
-                                                    <select className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0" value={form301Account.targetProduct} onChange={e=>setForm301Account({...form301Account, targetProduct: e.target.value})}>
-                                                        <option value="자누비아">자누비아</option>
-                                                        <option value="엠파맥스">엠파맥스</option>
-                                                        <option value="엑시글루">엑시글루</option>
-                                                        <option value="듀비에">듀비에</option>
-                                                    </select>
-                                                    <input type="number" className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0" placeholder="처방금액(원)" value={form301Account.rxAmount} onChange={e=>setForm301Account({...form301Account, rxAmount: e.target.value})}/>
-                                                    <input type="number" className="w-full p-3 bg-white border rounded-xl text-sm font-bold text-center min-w-0 col-span-2" placeholder="참석 Dr. 수 (명)" value={form301Account.doctorCount} onChange={e=>setForm301Account({...form301Account, doctorCount: e.target.value})}/>
-                                                </div>
-                                                <button type="button" onClick={add301Account} className="w-full bg-slate-800 text-white py-3 mt-2 rounded-xl text-sm font-black flex items-center justify-center gap-1"><Icon name="plus" size={16}/> 목록에 추가</button>
+                                                <FormSection step="2" title="담당자 정보">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <TextField id="r3-div" label="사업부명" required
+                                                                   value={form301Info.division}
+                                                                   onChange={e=>setForm301Info({...form301Info, division: e.target.value})} />
+                                                        <TextField id="r3-team" label="팀명"
+                                                                   value={form301Info.team}
+                                                                   onChange={e=>setForm301Info({...form301Info, team: e.target.value})} />
+                                                        <TextField id="r3-nm" label="담당자명" required autoComplete="name"
+                                                                   value={form301Info.name}
+                                                                   onChange={e=>setForm301Info({...form301Info, name: e.target.value})} />
+                                                        <TextField id="r3-ph" label="연락처" type="tel" inputMode="tel" autoComplete="tel"
+                                                                   value={form301Info.phone}
+                                                                   onChange={e=>setForm301Info({...form301Info, phone: e.target.value})} />
+                                                    </div>
+                                                </FormSection>
+
+                                                <FormSection step="3" title="거래처 추가">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <TextField id="r3-acc" label="거래처명"
+                                                                   value={form301Account.accountName}
+                                                                   onChange={e=>setForm301Account({...form301Account, accountName: e.target.value})} />
+                                                        <TextField id="r3-code" label="거래처코드"
+                                                                   value={form301Account.accountCode}
+                                                                   onChange={e=>setForm301Account({...form301Account, accountCode: e.target.value})} />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <Field id="r3-prod" label="타겟 품목">
+                                                            <select id="r3-prod" className={inputCls} style={inputStyle}
+                                                                    value={form301Account.targetProduct}
+                                                                    onChange={e=>setForm301Account({...form301Account, targetProduct: e.target.value})}>
+                                                                <option value="자누비아">자누비아</option>
+                                                                <option value="엠파맥스">엠파맥스</option>
+                                                                <option value="엑시글루">엑시글루</option>
+                                                                <option value="듀비에">듀비에</option>
+                                                            </select>
+                                                        </Field>
+                                                        <TextField id="r3-rx" label="처방금액" type="number" inputMode="numeric"
+                                                                   hint="원 단위"
+                                                                   value={form301Account.rxAmount}
+                                                                   onChange={e=>setForm301Account({...form301Account, rxAmount: e.target.value})} />
+                                                    </div>
+                                                    <TextField id="r3-dr" label="참석 Dr. 수" type="number" inputMode="numeric"
+                                                               min="1" hint="명 단위"
+                                                               value={form301Account.doctorCount}
+                                                               onChange={e=>setForm301Account({...form301Account, doctorCount: e.target.value})} />
+
+                                                    <button type="button" onClick={add301Account}
+                                                            className="w-full rounded-md bg-primary-soft text-primary font-bold text-label inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                                                            style={{ minHeight: 'var(--btn-h)' }}>
+                                                        <Icon name="plus" size={18} aria-hidden="true" /> 이 거래처 추가
+                                                    </button>
+                                                </FormSection>
+
+                                                {local301List.length > 0 && (
+                                                    <div className="rounded-md border border-line overflow-hidden">
+                                                        <p className="text-caption font-bold text-fg-muted px-3 py-2 bg-surface-2 border-b border-line text-left">
+                                                            추가된 거래처 {local301List.length}건
+                                                        </p>
+                                                        <ul className="divide-y divide-line max-h-56 overflow-y-auto custom-scrollbar">
+                                                            {local301List.map((acc, idx) => (
+                                                                <li key={idx} className="p-3 flex justify-between items-center gap-3 bg-surface">
+                                                                    <div className="text-left min-w-0">
+                                                                        <p className="text-label font-bold text-fg line-clamp-1">{acc.accountName}</p>
+                                                                        <p className="text-caption text-fg-muted mt-0.5">
+                                                                            {acc.targetProduct} · {acc.rxAmount}원 · Dr. {acc.doctorCount}명
+                                                                        </p>
+                                                                    </div>
+                                                                    <button onClick={()=>setLocal301List(local301List.filter((_,i)=>i!==idx))}
+                                                                            aria-label={`${acc.accountName} 목록에서 빼기`}
+                                                                            className="tap-icon rounded-md text-fg-subtle hover:text-danger hover:bg-danger-soft transition-colors shrink-0">
+                                                                        <Icon name="trash" size={16} aria-hidden="true" />
+                                                                    </button>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+
+                                                <button onClick={submit301All}
+                                                        className="w-full rounded-md bg-primary text-on-primary font-bold text-label inline-flex items-center justify-center gap-2 hover:bg-primary-hover transition-colors disabled:opacity-50"
+                                                        disabled={local301List.length === 0}
+                                                        style={{ minHeight: 'var(--btn-h)' }}>
+                                                    <Icon name="save" size={18} aria-hidden="true" />
+                                                    {local301List.length > 0 ? `${local301List.length}건 신청하기` : '거래처를 먼저 추가하세요'}
+                                                </button>
                                             </div>
+                                        </Card>
 
-                                            {local301List.length > 0 && (
-                                                <div className="mb-6 border rounded-xl overflow-hidden">
-                                                    <div className="bg-slate-100 p-2 text-[10px] font-bold text-slate-500">추가된 거래처 ({local301List.length}건)</div>
-                                                    <ul className="divide-y max-h-40 overflow-y-auto custom-scrollbar">
-                                                        {local301List.map((acc, idx) => (
-                                                            <li key={idx} className="p-3 text-left text-xs flex justify-between bg-white items-center">
-                                                                <span><b>{acc.accountName}</b> ({acc.targetProduct}) - {acc.rxAmount}원 / {acc.doctorCount}명 참석</span>
-                                                                <button onClick={()=>setLocal301List(local301List.filter((_,i)=>i!==idx))} className="tap-icon text-red-500 p-1" aria-label="삭제"><Icon name="trash" size={14} aria-hidden="true"/></button>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            )}
-
-                                            <button onClick={submit301All} className="w-full bg-orange-500 text-white py-5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg"><Icon name="save" size={18}/> 최종 제출하기</button>
-                                        </div>
-                                        
-                                        <div className="bg-white rounded-[2rem] border p-4 shadow-sm mt-6">
-                                            <h3 className="font-black text-sm text-slate-600 mb-3 text-center">나의 301 설명회 신청 현황</h3>
-                                            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                        <Card title="나의 301 신청 현황">
+                                            <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
                                                 {grouped301MyRequests.map((req, idx) => (
-                                                    <div key={idx} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center border">
-                                                        <div className="text-left">
-                                                            <p className="text-xs font-bold text-slate-800 line-clamp-1">[{req.title}] 총 {req.count}건</p>
-                                                            <p className="text-[10px] text-slate-500">{req.date} | {req.location}</p>
+                                                    <div key={idx} className="p-3 rounded-md bg-surface-2 border border-line flex justify-between items-center gap-3">
+                                                        <div className="text-left min-w-0">
+                                                            <p className="text-label font-bold text-fg line-clamp-1">
+                                                                {req.title} <span className="font-medium text-fg-muted">총 {req.count}건</span>
+                                                            </p>
+                                                            <p className="text-caption text-fg-muted mt-0.5">{req.date} · {req.location}</p>
                                                         </div>
-                                                        <span className={`text-[10px] font-black px-2 py-1 rounded-full whitespace-nowrap ${req.completed ? 'bg-orange-100 text-orange-700' : 'bg-slate-200 text-slate-600'}`}>
-                                                            {req.completed ? '처리 완료' : '대기 중'}
-                                                        </span>
+                                                        <StatusBadge done={req.completed} />
                                                     </div>
                                                 ))}
-                                                {grouped301MyRequests.length === 0 && <p className="text-xs text-slate-400 text-center py-4">신청 내역이 없습니다.</p>}
+                                                {grouped301MyRequests.length === 0 && (
+                                                    <p className="text-label text-fg-muted text-center py-8">신청 내역이 없습니다.</p>
+                                                )}
                                             </div>
-                                        </div>
+                                        </Card>
                                     </div>
                                 )}
 
                                 {activeTab === 'symp' && (
-                                    <div className="space-y-6">
-                                        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                                            <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center justify-center gap-2"><Icon name="presentation" size={24} className="text-green-600"/> 심포지엄 모객 신청</h2>
-                                            
-                                            {selectedSympData?.agendaImage && (
-                                                <div className="mb-6 rounded-2xl overflow-hidden border shadow-sm">
-                                                    <div className="bg-slate-800 text-white text-xs font-bold p-2">심포지엄 아젠다</div>
-                                                    <img src={selectedSympData.agendaImage} alt="Agenda" className="w-full object-contain" />
-                                                </div>
-                                            )}
-
+                                    <div className="space-y-4">
+                                        <Card title="심포지엄 모객" icon="presentation">
                                             <form onSubmit={submitSymp} className="space-y-4">
-                                                <select className="w-full p-4 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center appearance-none outline-none focus:border-green-500" value={sympForm.symposiumName} onChange={e=>setSympForm({...sympForm, symposiumName: e.target.value})} required>
-                                                    <option value="" disabled hidden>-- 참석할 심포지엄 선택 --</option>
-                                                    {symposiumList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                                                </select>
-                                                
-                                                <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-                                                    <p className="text-xs font-bold text-slate-500 text-left">담당자 정보</p>
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        <input className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center min-w-0" placeholder="사업부명" value={sympForm.division} onChange={e=>setSympForm({...sympForm, division: e.target.value})} required/>
-                                                        <input className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center min-w-0" placeholder="팀명" value={sympForm.team} onChange={e=>setSympForm({...sympForm, team: e.target.value})} required/>
-                                                        <input className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center min-w-0" placeholder="담당자명" value={sympForm.name} onChange={e=>setSympForm({...sympForm, name: e.target.value})} required/>
-                                                        <input className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center min-w-0" placeholder="담당자 연락처" value={sympForm.phone} onChange={e=>setSympForm({...sympForm, phone: e.target.value})} required/>
-                                                    </div>
-                                                </div>
+                                                <Field id="sy-name" label="참석할 심포지엄" required>
+                                                    <select id="sy-name" required className={inputCls} style={inputStyle}
+                                                            value={sympForm.symposiumName}
+                                                            onChange={e=>setSympForm({...sympForm, symposiumName: e.target.value})}>
+                                                        <option value="" disabled hidden>심포지엄을 선택하세요</option>
+                                                        {symposiumList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                                    </select>
+                                                </Field>
 
-                                                <div className="bg-slate-50 p-4 rounded-2xl border space-y-3">
-                                                    <p className="text-xs font-bold text-slate-500 text-left">거래처 및 모객 닥터 정보</p>
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        <input className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center min-w-0" placeholder="거래처명" value={sympForm.accountName} onChange={e=>setSympForm({...sympForm, accountName: e.target.value})} required/>
-                                                        <input className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center min-w-0" placeholder="거래처코드" value={sympForm.accountCode} onChange={e=>setSympForm({...sympForm, accountCode: e.target.value})} required/>
-                                                        <select className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center min-w-0" value={sympForm.targetProduct} onChange={e=>setSympForm({...sympForm, targetProduct: e.target.value})}>
-                                                            <option value="자누비아">자누비아</option>
-                                                            <option value="엠파맥스">엠파맥스</option>
-                                                            <option value="엑시글루">엑시글루</option>
-                                                            <option value="듀비에">듀비에</option>
-                                                        </select>
-                                                        <input type="number" className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center min-w-0" placeholder="타겟 처방금액(원)" value={sympForm.rxAmount} onChange={e=>setSympForm({...sympForm, rxAmount: e.target.value})} required/>
-                                                        <input className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center min-w-0" placeholder="모객 닥터명" value={sympForm.doctorName} onChange={e=>setSympForm({...sympForm, doctorName: e.target.value})} required/>
-                                                        <input className="w-full p-3 bg-white border rounded-xl text-xs font-bold text-center min-w-0" placeholder="닥터 연락처" value={sympForm.doctorPhone} onChange={e=>setSympForm({...sympForm, doctorPhone: e.target.value})} required/>
+                                                {selectedSympData?.agendaImage && (
+                                                    <div className="rounded-md border border-line overflow-hidden">
+                                                        <p className="text-caption font-bold text-fg-muted px-3 py-2 bg-surface-2 border-b border-line text-left">
+                                                            안내문 / 아젠다
+                                                        </p>
+                                                        <img src={selectedSympData.agendaImage} alt="심포지엄 안내문"
+                                                             loading="lazy" className="w-full object-contain bg-surface" />
                                                     </div>
-                                                    <textarea className="w-full p-4 bg-white border rounded-xl text-sm font-bold h-24 outline-none resize-none mt-2" placeholder="기타 요청 사항" value={sympForm.memo} onChange={e=>setSympForm({...sympForm, memo: e.target.value})} />
-                                                </div>
+                                                )}
 
-                                                <button className="w-full bg-green-600 text-white py-5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg"><Icon name="save" size={18}/> 모객 등록하기</button>
+                                                <FormSection step="1" title="담당자 정보">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <TextField id="sy-div" label="사업부명"
+                                                                   value={sympForm.division}
+                                                                   onChange={e=>setSympForm({...sympForm, division: e.target.value})} />
+                                                        <TextField id="sy-team" label="팀명"
+                                                                   value={sympForm.team}
+                                                                   onChange={e=>setSympForm({...sympForm, team: e.target.value})} />
+                                                        <TextField id="sy-nm" label="담당자명" autoComplete="name"
+                                                                   value={sympForm.name}
+                                                                   onChange={e=>setSympForm({...sympForm, name: e.target.value})} />
+                                                        <TextField id="sy-ph" label="연락처" type="tel" inputMode="tel" autoComplete="tel"
+                                                                   value={sympForm.phone}
+                                                                   onChange={e=>setSympForm({...sympForm, phone: e.target.value})} />
+                                                    </div>
+                                                </FormSection>
+
+                                                <FormSection step="2" title="거래처 정보">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <TextField id="sy-acc" label="거래처명"
+                                                                   value={sympForm.accountName}
+                                                                   onChange={e=>setSympForm({...sympForm, accountName: e.target.value})} />
+                                                        <TextField id="sy-code" label="거래처코드"
+                                                                   value={sympForm.accountCode}
+                                                                   onChange={e=>setSympForm({...sympForm, accountCode: e.target.value})} />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <Field id="sy-prod" label="타겟 품목">
+                                                            <select id="sy-prod" className={inputCls} style={inputStyle}
+                                                                    value={sympForm.targetProduct}
+                                                                    onChange={e=>setSympForm({...sympForm, targetProduct: e.target.value})}>
+                                                                <option value="자누비아">자누비아</option>
+                                                                <option value="엠파맥스">엠파맥스</option>
+                                                                <option value="엑시글루">엑시글루</option>
+                                                                <option value="듀비에">듀비에</option>
+                                                            </select>
+                                                        </Field>
+                                                        <TextField id="sy-rx" label="처방금액" type="number" inputMode="numeric"
+                                                                   hint="원 단위"
+                                                                   value={sympForm.rxAmount}
+                                                                   onChange={e=>setSympForm({...sympForm, rxAmount: e.target.value})} />
+                                                    </div>
+                                                </FormSection>
+
+                                                <FormSection step="3" title="모객 닥터 정보">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <TextField id="sy-dr" label="닥터명"
+                                                                   value={sympForm.doctorName}
+                                                                   onChange={e=>setSympForm({...sympForm, doctorName: e.target.value})} />
+                                                        <TextField id="sy-drph" label="닥터 연락처" type="tel" inputMode="tel"
+                                                                   value={sympForm.doctorPhone}
+                                                                   onChange={e=>setSympForm({...sympForm, doctorPhone: e.target.value})} />
+                                                    </div>
+                                                    <Field id="sy-memo" label="기타 요청 사항">
+                                                        <textarea id="sy-memo" rows={3}
+                                                                  className={inputCls + " py-3 leading-relaxed"}
+                                                                  value={sympForm.memo}
+                                                                  onChange={e=>setSympForm({...sympForm, memo: e.target.value})} />
+                                                    </Field>
+                                                </FormSection>
+
+                                                <button className="w-full rounded-md bg-primary text-on-primary font-bold text-label inline-flex items-center justify-center gap-2 hover:bg-primary-hover transition-colors"
+                                                        style={{ minHeight: 'var(--btn-h)' }}>
+                                                    <Icon name="save" size={18} aria-hidden="true" /> 모객 등록하기
+                                                </button>
                                             </form>
-                                        </div>
-                                        
-                                        <div className="bg-white rounded-[2rem] border p-4 shadow-sm mt-6">
-                                            <h3 className="font-black text-sm text-slate-600 mb-3 text-center">나의 심포지엄 모객 현황</h3>
-                                            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                        </Card>
+
+                                        <Card title="나의 모객 현황">
+                                            <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
                                                 {sympRequests.filter(r => r.empId === empId).map(req => (
-                                                    <div key={req.id} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center border">
-                                                        <div className="text-left">
-                                                            <p className="text-xs font-bold text-slate-800 line-clamp-1">[{req.symposiumName}] {req.accountName}</p>
-                                                            <p className="text-[10px] text-slate-500">{req.dateString.slice(0, 11)} 신청</p>
+                                                    <div key={req.id} className="p-3 rounded-md bg-surface-2 border border-line flex justify-between items-center gap-3">
+                                                        <div className="text-left min-w-0">
+                                                            <p className="text-label font-bold text-fg line-clamp-1">{req.symposiumName}</p>
+                                                            <p className="text-caption text-fg-muted mt-0.5">
+                                                                {req.accountName} · {req.doctorName || '닥터 미지정'}
+                                                            </p>
                                                         </div>
-                                                        <span className={`text-[10px] font-black px-2 py-1 rounded-full whitespace-nowrap ${req.completed ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>
-                                                            {req.completed ? '처리 완료' : '대기 중'}
-                                                        </span>
+                                                        <StatusBadge done={req.completed} />
                                                     </div>
                                                 ))}
-                                                {sympRequests.filter(r => r.empId === empId).length === 0 && <p className="text-xs text-slate-400 text-center py-4">모객 내역이 없습니다.</p>}
+                                                {sympRequests.filter(r => r.empId === empId).length === 0 && (
+                                                    <p className="text-label text-fg-muted text-center py-8">등록한 모객 내역이 없습니다.</p>
+                                                )}
                                             </div>
-                                        </div>
+                                        </Card>
                                     </div>
                                 )}
 
                                 {activeTab === 'inquiries' && (
-                                    <div className="space-y-6">
-                                        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                                            <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner"><Icon name="messageSquare" size={32}/></div>
-                                            <h2 className="text-xl font-black text-slate-800 mb-6">문의 및 건의사항</h2>
-                                            <form onSubmit={submitInquiry} className="space-y-3">
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-purple-500 min-w-0" placeholder="사업부명" value={inquiryForm.division} onChange={e=>setInquiryForm({...inquiryForm, division: e.target.value})} required/>
-                                                    <input className="p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-purple-500 min-w-0" placeholder="팀명" value={inquiryForm.team} onChange={e=>setInquiryForm({...inquiryForm, team: e.target.value})} required/>
-                                                </div>
-                                                <input className="w-full p-3 bg-slate-50 border-2 rounded-xl text-sm font-bold text-center outline-none focus:border-purple-500" placeholder="담당자명" value={inquiryForm.name} onChange={e=>setInquiryForm({...inquiryForm, name: e.target.value})} required/>
-                                                <textarea className="w-full p-4 bg-slate-50 border-2 rounded-xl text-sm font-bold h-32 text-left resize-none outline-none focus:border-purple-500" placeholder="자유롭게 의견을 남겨주세요." value={inquiryForm.content} onChange={e=>setInquiryForm({...inquiryForm, content: e.target.value})} required/>
-                                                <button className="w-full bg-purple-600 text-white py-4 rounded-xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">의견 접수하기</button>
+                                    <div className="space-y-4">
+                                        <Card title="문의 · 건의" icon="messageSquare">
+                                            <form onSubmit={submitInquiry} className="space-y-4">
+                                                <FormSection step="1" title="작성자 정보">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <TextField id="inq-div" label="사업부명" required
+                                                                   value={inquiryForm.division}
+                                                                   onChange={e=>setInquiryForm({...inquiryForm, division: e.target.value})} />
+                                                        <TextField id="inq-team" label="팀명" required
+                                                                   value={inquiryForm.team}
+                                                                   onChange={e=>setInquiryForm({...inquiryForm, team: e.target.value})} />
+                                                    </div>
+                                                    <TextField id="inq-name" label="담당자명" required
+                                                               autoComplete="name"
+                                                               value={inquiryForm.name}
+                                                               onChange={e=>setInquiryForm({...inquiryForm, name: e.target.value})} />
+                                                </FormSection>
+
+                                                <Field id="inq-content" label="내용" required
+                                                       hint="개선 아이디어, 불편한 점, 필요한 자료 등 자유롭게 남겨주세요.">
+                                                    <textarea id="inq-content" required rows={5}
+                                                              className={inputCls + " py-3 leading-relaxed"}
+                                                              placeholder="자유롭게 의견을 남겨주세요."
+                                                              value={inquiryForm.content}
+                                                              onChange={e=>setInquiryForm({...inquiryForm, content: e.target.value})} />
+                                                </Field>
+
+                                                <button className="w-full rounded-md bg-primary text-on-primary font-bold text-label inline-flex items-center justify-center gap-2 hover:bg-primary-hover transition-colors"
+                                                        style={{ minHeight: 'var(--btn-h)' }}>
+                                                    <Icon name="save" size={18} aria-hidden="true" /> 등록하기
+                                                </button>
                                             </form>
-                                        </div>
-                                        
-                                        <div className="bg-white rounded-[2rem] border p-4 shadow-sm mt-6">
-                                            <h3 className="font-black text-sm text-slate-600 mb-3 text-center">나의 건의/문의 접수 현황</h3>
-                                            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                                                {inquiries.filter(i => i.empId === empId).map(inq => (
-                                                    <div key={inq.id} className="p-3 bg-slate-50 rounded-xl flex justify-between items-center border">
-                                                        <div className="text-left flex-1 min-w-0 pr-2">
-                                                            <p className="text-xs font-bold text-slate-800 line-clamp-1">{inq.content}</p>
-                                                            <p className="text-[10px] text-slate-500">{inq.dateString.slice(0, 11)} 접수</p>
+                                        </Card>
+
+                                        <Card title="나의 문의 내역">
+                                            <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+                                                {inquiries.filter(i => i.empId === empId).map(item => (
+                                                    <div key={item.id} className="p-3 rounded-md bg-surface-2 border border-line">
+                                                        <div className="flex justify-between items-start gap-3 mb-1">
+                                                            <p className="text-caption text-fg-muted">{item.dateString}</p>
+                                                            <StatusBadge done={item.completed} doneLabel="답변 완료" waitLabel="접수됨" />
                                                         </div>
-                                                        <span className={`text-[10px] font-black px-2 py-1 rounded-full whitespace-nowrap shrink-0 ${inq.completed ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-600'}`}>
-                                                            {inq.completed ? '답변 완료' : '대기 중'}
-                                                        </span>
+                                                        <p className="text-label text-fg text-left leading-relaxed whitespace-pre-line">{item.content}</p>
                                                     </div>
                                                 ))}
-                                                {inquiries.filter(i => i.empId === empId).length === 0 && <p className="text-xs text-slate-400 text-center py-4">문의 내역이 없습니다.</p>}
+                                                {inquiries.filter(i => i.empId === empId).length === 0 && (
+                                                    <p className="text-label text-fg-muted text-center py-8">등록한 문의가 없습니다.</p>
+                                                )}
                                             </div>
-                                        </div>
+                                        </Card>
                                     </div>
                                 )}
 
