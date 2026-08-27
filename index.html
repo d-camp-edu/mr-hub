@@ -92,6 +92,8 @@
             collection, addDoc, doc, setDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit,
             signInAnonymously, onAuthStateChanged
         };
+        // React가 500ms 간격으로 폴링하며 기다리지 않도록 준비 완료를 알린다.
+        window.dispatchEvent(new Event('fb-ready'));
     </script>
 
     <style>
@@ -208,13 +210,157 @@
                 transition-duration: .01ms !important;
             }
         }
+
+        /* ═══════════ 부팅 스플래시 ═══════════ */
+        /* 브랜드 설정(로고·제목·포인트 컬러)이 도착하기 전까지 기본 화면 대신 이 화면을 보여준다.
+           <body>의 조립 스크립트와 React <BootSplash/>가 같은 클래스를 쓰므로,
+           React가 마운트되는 순간에도 그림이 바뀌지 않는다. */
+        .boot-splash {
+            position: fixed; inset: 0; z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--color-deep);
+            padding: var(--space-6);
+        }
+        .boot-card {
+            display: flex; flex-direction: column; align-items: center; gap: var(--space-6);
+        }
+        .boot-logo {
+            width: 64px; height: 64px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: var(--radius-md);
+            background: var(--color-primary-soft); color: var(--color-primary);
+        }
+        /* 저장된 로고가 있으면 소프트 박스 없이 이미지만 (로그인 카드와 동일한 모양) */
+        .boot-logo.has-img { width: auto; height: auto; background: none; border-radius: 0; }
+        .boot-logo-img { max-height: 56px; width: auto; object-fit: contain; }
+        .boot-title { font-size: 24px; line-height: 1.3; font-weight: 700; color: #FFFFFF; }
+        .boot-spinner {
+            width: 28px; height: 28px; border-radius: 50%;
+            border: 3px solid rgba(255,255,255,.22);
+            border-top-color: var(--color-primary);
+            animation: boot-spin .7s linear infinite;
+        }
+        @keyframes boot-spin { to { transform: rotate(360deg); } }
+
+        /* 스플래시 → 본 화면 전환 */
+        .boot-fade { animation: boot-fade-in .18s ease-out both; }
+        @keyframes boot-fade-in { from { opacity: 0 } to { opacity: 1 } }
+
+        /* 설정을 못 받고 있을 때만 나오는 안내 (기본 화면으로 멋대로 넘기지 않는다) */
+        .boot-stall { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); }
+        .boot-stall-msg {
+            font-size: 14px; line-height: 1.6; text-align: center;
+            color: rgba(255,255,255,.72);
+        }
+        .boot-stall-btn {
+            min-height: 44px; padding: 0 var(--space-6);
+            border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,.28);
+            background: transparent; color: #FFFFFF;
+            font-size: 14px; font-weight: 700; cursor: pointer;
+            transition: background-color .15s ease;
+        }
+        .boot-stall-btn:hover { background: rgba(255,255,255,.12); }
+
+        @media (prefers-reduced-motion: reduce) {
+            /* 위 전역 규칙이 스피너 회전까지 멈추므로, 대신 글자로 상태를 알린다 */
+            .boot-spinner { display: none; }
+            .boot-status {
+                position: static; width: auto; height: auto;
+                margin: 0; clip: auto; overflow: visible;
+                font-size: 14px; color: rgba(255,255,255,.7);
+            }
+        }
     </style>
+
+    <!-- 저장해 둔 포인트 컬러를 첫 페인트 전에 확정한다.
+         (로고·제목은 #root가 필요해서 <body>의 스플래시 조립 스크립트가 이어 받는다) -->
+    <script>
+        (function () {
+            try {
+                var cache = JSON.parse(localStorage.getItem('mr_brand_cache') || 'null');
+                if (!cache) return;
+                window.__BRAND_CACHE__ = cache;
+
+                var t = cache.theme;
+                if (!t) return;
+                // deriveTheme() 결과를 그대로 저장해 두었으므로 CSS 변수에 다시 꽂기만 하면 된다.
+                var vars = {
+                    primary: '--color-primary', hover: '--color-primary-hover', soft: '--color-primary-soft',
+                    onPrimary: '--color-on-primary', bg: '--color-bg', surface2: '--color-surface-2',
+                    border: '--color-border', fg: '--color-fg', fgMuted: '--color-fg-muted',
+                    fgSubtle: '--color-fg-subtle', deep: '--color-deep'
+                };
+                var r = document.documentElement.style;
+                for (var k in vars) { if (t[k]) r.setProperty(vars[k], t[k]); }
+            } catch (e) { /* 캐시가 깨졌으면 조용히 기본값으로 */ }
+        })();
+    </script>
 </head>
 <body class="bg-surface-2">
+    <!-- Babel이 JSX를 컴파일하는 동안 빈 화면이 보이지 않도록 스플래시를 미리 그려둔다.
+         마크업을 정적으로 두면 "기본 로고 → 저장된 로고" 교체가 눈에 띄므로,
+         아래 스크립트가 완성된 스플래시를 한 번에 넣는다(중간 상태 없음).
+         createRoot().render()가 이걸 <BootSplash/>로 교체하는데 같은 모양이라 깜빡임이 없다. -->
     <div id="root"></div>
+    <script>
+        (function () {
+            try {
+                var cache = window.__BRAND_CACHE__ || null;   // <head>에서 읽어 둔 지난 방문의 설정
+                var b = (cache && cache.brand) || {};
+                if (cache && cache.theme && cache.theme.bg) document.body.style.background = cache.theme.bg;
+
+                var logoBox = document.createElement('div');
+                if (b.companyLogo) {
+                    logoBox.className = 'boot-logo has-img';
+                    var img = document.createElement('img');
+                    img.className = 'boot-logo-img';
+                    img.src = b.companyLogo;
+                    img.alt = b.companyName || '';
+                    logoBox.appendChild(img);
+                } else {
+                    logoBox.className = 'boot-logo';
+                    logoBox.innerHTML =
+                        '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+                        ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                        '<rect x="4" y="2" width="16" height="20" rx="2" ry="2" />' +
+                        '<line x1="9" y1="22" x2="9" y2="2" /><line x1="15" y1="22" x2="15" y2="2" />' +
+                        '<line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="10" x2="20" y2="10" />' +
+                        '<line x1="4" y1="14" x2="20" y2="14" /><line x1="4" y1="18" x2="20" y2="18" />' +
+                        '</svg>';
+                }
+
+                var title = document.createElement('h1');
+                title.className = 'boot-title';
+                title.textContent = b.appTitle || 'MR HUB';
+
+                var spinner = document.createElement('div');
+                spinner.className = 'boot-spinner';
+                spinner.setAttribute('aria-hidden', 'true');
+
+                var status = document.createElement('span');
+                status.className = 'sr-only boot-status';
+                status.setAttribute('role', 'status');
+                status.textContent = '불러오는 중…';
+
+                var card = document.createElement('div');
+                card.className = 'boot-card';
+                card.appendChild(logoBox);
+                card.appendChild(title);
+                card.appendChild(spinner);
+                card.appendChild(status);
+
+                var splash = document.createElement('div');
+                splash.className = 'boot-splash';
+                splash.appendChild(card);
+
+                // 다 조립한 뒤 한 번에 붙인다 — 반쯤 그려진 스플래시가 보일 틈이 없다.
+                document.getElementById('root').appendChild(splash);
+            } catch (e) { /* 실패해도 곧 React가 같은 스플래시를 그린다 */ }
+        })();
+    </script>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useLayoutEffect, useMemo, useCallback } = React;
 
         // --- SVG 아이콘 셋 ---
         const Icon = ({ name, size = 20, className = "" }) => {
@@ -390,6 +536,51 @@
                 bodyContrast: contrastRatio(fg, bg)
             };
         };
+
+        // ═══════════ 브랜드 캐시 ═══════════
+        // 첫 페인트에 기본 화면(기본 로고·"MR HUB"·파란색)이 스쳐 지나가지 않도록,
+        // 마지막으로 불러온 브랜드 설정과 파생 테마를 저장해 두고 다음 방문의 초기값으로 쓴다.
+        // <body> 상단 부트 스크립트가 같은 키를 읽는다.
+        const BRAND_CACHE_KEY = 'mr_brand_cache';
+
+        const readBrandCache = () => {
+            if (window.__BRAND_CACHE__) return window.__BRAND_CACHE__;
+            try { return JSON.parse(localStorage.getItem(BRAND_CACHE_KEY) || "null"); }
+            catch (e) { return null; }
+        };
+
+        const writeBrandCache = (brand, theme) => {
+            // 로고가 base64라 용량을 넘길 수 있다. 캐시는 없어도 동작하므로 실패는 무시한다.
+            try { localStorage.setItem(BRAND_CACHE_KEY, JSON.stringify({ brand, theme })); }
+            catch (e) { /* 저장 실패 시 다음 방문에 스플래시가 조금 더 보일 뿐 */ }
+        };
+
+        // ═══════════ 부팅 스플래시 ═══════════
+        // <body>의 정적 스플래시와 같은 마크업. 브랜드 설정이 확정될 때까지 이 화면만 보여준다.
+        const BootSplash = ({ brand, stalled, onContinue }) => (
+            <div className="boot-splash">
+                <div className="boot-card">
+                    <div className={brand.companyLogo ? "boot-logo has-img" : "boot-logo"}>
+                        {brand.companyLogo
+                            ? <img src={brand.companyLogo} alt={brand.companyName || ""} className="boot-logo-img" />
+                            : <Icon name="building" size={32} aria-hidden="true" />}
+                    </div>
+                    <h1 className="boot-title">{brand.appTitle}</h1>
+                    <div className="boot-spinner" aria-hidden="true" />
+                    <span className="sr-only boot-status" role="status">불러오는 중…</span>
+                    {stalled && (
+                        <div className="boot-stall" role="status">
+                            <p className="boot-stall-msg">
+                                설정을 불러오지 못하고 있습니다.<br />네트워크 상태를 확인해 주세요.
+                            </p>
+                            <button type="button" className="boot-stall-btn" onClick={onContinue}>
+                                기본 설정으로 계속
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
 
         // ═══════════ 폼 공용 컴포넌트 ═══════════
         // 라벨을 항상 노출하고(placeholder 단독 금지), 터치 높이를 보장한다.
@@ -592,7 +783,26 @@
                     { id: "onco", label: "항암사업부", sublabel: "",          logo: "", dataAppId: "onco-team-mr-hub-v3" }
                 ]
             };
-            const [brand, setBrand] = useState(DEFAULT_BRAND);
+            // 지난 방문에 저장한 설정을 곧바로 초기값으로 쓴다 → 재방문 시 기본 화면이 아예 안 보인다.
+            const [brand, setBrand] = useState(() => {
+                const cached = readBrandCache();
+                const b = cached && cached.brand;
+                if (!b) return DEFAULT_BRAND;
+                return {
+                    ...DEFAULT_BRAND, ...b,
+                    divisions: Array.isArray(b.divisions) && b.divisions.length
+                        ? b.divisions
+                        : DEFAULT_BRAND.divisions
+                };
+            });
+
+            // 화면 게이트: 브랜드 설정이 확정되기 전에는 스플래시만 보여준다.
+            // 캐시가 있으면 이미 "내가 설정한 화면"이므로 곧바로 연다.
+            const [brandReady, setBrandReady] = useState(() => !!readBrandCache());
+            // 파이어스토어 문서를 실제로 받았는가 (기본값을 캐시에 굳히지 않기 위해 구분한다)
+            const [brandLoaded, setBrandLoaded] = useState(false);
+            // 설정을 못 받고 있을 때만 스플래시에 안내와 수동 진행 버튼을 띄운다
+            const [bootStalled, setBootStalled] = useState(false);
 
             const brandRef = useCallback(
                 () => window.FB.doc(window.FB.db, 'artifacts', window.FB.ROOT_ID, 'public', 'data', 'settings', 'brand'),
@@ -620,7 +830,10 @@
             useEffect(() => {
                 if (!user || !window.FB) return;
                 return window.FB.onSnapshot(brandRef(), (snap) => {
+                    // 응답이 온 시점에 화면을 연다 — 문서가 없어도 "확인됨"이므로 기본값으로 진행.
+                    setBrandReady(true);
                     if (!snap.exists()) return;   // 없으면 기본값 유지 (덮어쓰지 않음)
+                    setBrandLoaded(true);
                     const d = snap.data() || {};
                     setBrand(prev => ({
                         ...prev,
@@ -629,12 +842,24 @@
                             ? normalizeDivisions(d.divisions)
                             : prev.divisions
                     }));
-                }, (e) => console.error("브랜드 설정 구독 오류:", e));
+                }, (e) => {
+                    console.error("브랜드 설정 구독 오류:", e);
+                    setBootStalled(true);   // 화면을 멋대로 열지 않고 사용자에게 선택권을 준다
+                });
             }, [user, brandRef, normalizeDivisions]);
 
-            // 포인트 컬러를 CSS 변수에 반영 (토큰을 쓰는 모든 화면에 즉시 전파)
-            const theme = useMemo(() => deriveTheme(brand.pointColor), [brand.pointColor]);
+            // 여기서 자동으로 화면을 열면 기본 브랜드가 잠깐 보였다가 바뀐다 — 없애려던 바로 그 깜빡임.
+            // 그래서 시간이 지나도 화면을 열지 않고, 스플래시에 안내와 수동 진행 버튼만 띄운다.
             useEffect(() => {
+                if (brandReady) return;
+                const t = setTimeout(() => setBootStalled(true), 6000);
+                return () => clearTimeout(t);
+            }, [brandReady]);
+
+            // 포인트 컬러를 CSS 변수에 반영 (토큰을 쓰는 모든 화면에 즉시 전파).
+            // useEffect는 페인트 뒤에 돌아서 색이 한 프레임 틀리게 보인다 → useLayoutEffect.
+            const theme = useMemo(() => deriveTheme(brand.pointColor), [brand.pointColor]);
+            useLayoutEffect(() => {
                 const r = document.documentElement.style;
                 r.setProperty('--color-primary',       theme.primary);
                 r.setProperty('--color-primary-hover', theme.hover);
@@ -649,7 +874,10 @@
                 r.setProperty('--color-fg-subtle', theme.fgSubtle);
                 r.setProperty('--color-deep',      theme.deep);
                 document.body.style.background = theme.bg;
-            }, [theme]);
+                // 다음 방문의 첫 페인트를 위해 저장 — 부트 스크립트가 이 값을 그대로 다시 꽂는다.
+                // 실제로 불러온 설정만 저장한다(기본값을 굳히면 다음 방문에 또 화면이 바뀐다).
+                if (brandLoaded) writeBrandCache(brand, theme);
+            }, [theme, brand, brandLoaded]);
 
             // 모든 Firestore 경로는 이 두 헬퍼만 거친다 (경로 오타로 데이터가 안 보이는 사고 방지)
             const colRef = useCallback(
@@ -685,16 +913,20 @@
                 setConfirmState(s => { s && s.resolve(result); return null; });
             }, []);
 
+            // Firebase 준비를 폴링으로 기다리면 최대 500ms를 그냥 버린다. 준비 이벤트로 바로 받는다.
             useEffect(() => {
-                const init = setInterval(() => {
-                    if (window.FB) {
-                        clearInterval(init);
-                        const { auth, signInAnonymously, onAuthStateChanged } = window.FB;
-                        signInAnonymously(auth).then(() => {
-                            onAuthStateChanged(auth, setUser);
-                        }).catch(err => console.error("Login Error:", err));
-                    }
-                }, 500);
+                const start = () => {
+                    const { auth, signInAnonymously, onAuthStateChanged } = window.FB;
+                    signInAnonymously(auth).then(() => {
+                        onAuthStateChanged(auth, setUser);
+                    }).catch(err => {
+                        console.error("Login Error:", err);
+                        setBootStalled(true);   // 인증이 막히면 계속 기다려도 소용없으니 즉시 안내
+                    });
+                };
+                if (window.FB) { start(); return; }
+                window.addEventListener('fb-ready', start, { once: true });
+                return () => window.removeEventListener('fb-ready', start);
             }, []);
 
             // 2. 실시간 데이터 불러오기
@@ -1200,6 +1432,7 @@
                 try {
                     await window.FB.setDoc(brandRef(), clean, { merge: true });
                     setBrand(clean);
+                    setBrandLoaded(true);   // 문서가 방금 생겼다 → 캐시에 기록해도 안전
                     toast("브랜드 설정을 저장했습니다.", "success");
                     setBrandEditorOpen(false);
                 } catch (e) {
@@ -1211,6 +1444,13 @@
             };
 
             // ===== 화면 렌더링 =====
+
+            // 브랜드 설정(로고·제목·포인트 컬러·사업부)이 확정되기 전에는 기본 화면 대신 스플래시.
+            // 이 게이트가 없으면 기본 브랜드로 한 번 그렸다가 실제 설정으로 다시 그리게 된다.
+            if (!brandReady) {
+                return <BootSplash brand={brand} stalled={bootStalled}
+                                   onContinue={() => setBrandReady(true)} />;
+            }
 
             // 브랜드 설정 화면 (로그인 전 첫페이지에서 진입)
             if (brandEditorOpen && brandDraft) {
@@ -1476,7 +1716,7 @@
             if (!isLoggedIn) {
                 const needsDivision = !currentDivision;
                 return (
-                    <div className="min-h-screen flex flex-col items-center justify-center bg-deep p-6 relative">
+                    <div className="boot-fade min-h-screen flex flex-col items-center justify-center bg-deep p-6 relative">
                         <div className="bg-surface w-full max-w-sm rounded-lg p-8 shadow-modal">
 
                             {/* 종근당 로고 (설정 화면에서 교체 가능) */}
@@ -1612,7 +1852,7 @@
             }
 
             return (
-                <div className="min-h-screen bg-surface-2 font-sans pb-24 relative">
+                <div className="boot-fade min-h-screen bg-surface-2 font-sans pb-24 relative">
                     {/* 상단 헤더 */}
                     <header className="bg-surface/90 backdrop-blur-md border-b sticky top-0 z-40 px-4 py-4 flex justify-between items-center shadow-sm">
                         <div className="flex items-center gap-2 min-w-0">
