@@ -1,0 +1,49 @@
+name: 브로셔 택배 자동 발송
+
+on:
+  # sendParcel/checkDelivery 구현 완료 후 주석 해제
+  # schedule:
+  #   # UTC 기준. 평일 KST 09:00~18:00 매시 정각 (= UTC 00:00~09:00)
+  #   - cron: "0 0-9 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true면 사이트에 실제로 등록하지 않고 확인만 함"
+        default: "true"
+
+concurrency:
+  group: brochure-shipping
+  cancel-in-progress: false
+
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: automation
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+
+      - run: node ship.js
+        env:
+          SHIP_ID: ${{ secrets.SHIP_ID }}
+          SHIP_PW: ${{ secrets.SHIP_PW }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # 예약 실행은 실제 발송, 수동 실행은 입력값을 따름
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+
+      # 실패 시 마지막 화면을 받아볼 수 있게 스크린샷 보관
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: automation/screenshots/
+          retention-days: 7

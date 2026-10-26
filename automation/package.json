@@ -1,0 +1,9 @@
+{
+  "name": "mr-hub-brochure-shipping",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "playwright": "^1.48.0"
+  }
+}
