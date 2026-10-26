@@ -66,7 +66,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, setDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, setDoc, getDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, where, orderBy, limit, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         // PM님 파이어베이스 설정값
         const firebaseConfig = {
@@ -89,7 +89,7 @@
         // React에서 사용할 수 있도록 전역 창구 열기
         window.FB = {
             db, auth, appId, ROOT_ID,
-            collection, addDoc, doc, setDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, orderBy, limit,
+            collection, addDoc, doc, setDoc, getDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, where, orderBy, limit, increment,
             signInAnonymously, onAuthStateChanged
         };
         // React가 500ms 간격으로 폴링하며 기다리지 않도록 준비 완료를 알린다.
@@ -408,6 +408,9 @@
         // PM 관리자 접속 비밀번호
         const ADMIN_PASSWORD = "1024";
 
+        // 조회순 집계에 들어가는 활동 (PDF 열람, PPT 열람, 영상 시청)
+        const VIEW_ACTION = /열람|시청/;
+
         // 범용 이미지 압축 헬퍼 함수
         const compressImage = (file, callback) => {
             const reader = new FileReader();
@@ -657,7 +660,6 @@
             const [editingId, setEditingId] = useState(null);
             
             const [messages, setMessages] = useState([]);
-            const [videos, setVideos] = useState([]);
             const [requests, setRequests] = useState([]);
             const [requests301, setRequests301] = useState([]);
             const [sympRequests, setSympRequests] = useState([]);
@@ -945,18 +947,14 @@
                     }
                 });
 
+                // 공용 목록만 여기서 구독한다. 신청 내역은 아래 별도 effect에서 역할별로 구독
+                // (관리자 전환 때 공용 목록까지 전부 다시 읽지 않도록 isAdminMode에 의존하지 않음)
                 const listeners = [
                     { col: 'messages', setter: setMessages, sortField: 'timestamp' },
-                    { col: 'videos', setter: setVideos, sortField: 'timestamp' },
-                    { col: 'requests', setter: setRequests, sortField: 'timestamp' },
-                    { col: 'requests_301', setter: setRequests301, sortField: 'timestamp' },
-                    { col: 'symposium_requests', setter: setSympRequests, sortField: 'timestamp' },
-                    { col: 'inquiries', setter: setInquiries, sortField: 'timestamp' },
                     { col: 'symposium_list', setter: setSymposiumList, sortField: 'timestamp' },
                     { col: 'categories', setter: setCategoriesList, sortField: 'order' },
-                    { col: 'videoCategories', setter: setVideoCategoriesList, sortField: 'order' },
-                    { col: 'brochure_photos', setter: setBrochurePhotos, sortField: 'timestamp' }
-                ].map(item => 
+                    { col: 'videoCategories', setter: setVideoCategoriesList, sortField: 'order' }
+                ].map(item =>
                     onSnapshot(colRef(item.col), (snap) => {
                         let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         if (item.sortField === 'order') {
@@ -973,18 +971,39 @@
                 );
 
                 return () => { unsubSettings(); listeners.forEach(unsub => unsub()); };
-            }, [user, isAdminMode, activeAppId, colRef, docRef]);
+            }, [user, activeAppId, colRef, docRef]);
+
+            // 신청 내역: 관리자는 전체, MR은 본인 사번 것만 읽는다 (읽기 사용량 절감)
+            useEffect(() => {
+                if (!user || !window.FB || !activeAppId) return;
+                const { onSnapshot, query, where } = window.FB;
+                const setters = [setRequests, setRequests301, setSympRequests, setInquiries, setBrochurePhotos];
+                if (!isAdminMode && !empId) { setters.forEach(set => set([])); return; }
+
+                const cols = [
+                    { col: 'requests', setter: setRequests },
+                    { col: 'requests_301', setter: setRequests301 },
+                    { col: 'symposium_requests', setter: setSympRequests },
+                    { col: 'inquiries', setter: setInquiries },
+                    ...(isAdminMode ? [{ col: 'brochure_photos', setter: setBrochurePhotos }] : [])
+                ];
+                const unsubs = cols.map(item => {
+                    const ref = isAdminMode ? colRef(item.col) : query(colRef(item.col), where('empId', '==', empId));
+                    return onSnapshot(ref, (snap) => {
+                        item.setter(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.timestamp - a.timestamp));
+                    }, (err) => console.error(`${item.col} 구독 오류:`, err));
+                });
+                return () => unsubs.forEach(unsub => unsub());
+            }, [user, isAdminMode, empId, activeAppId, colRef]);
 
             // 관리자 탭 로그 불러오기
             const fetchRecentLogs = useCallback(async () => {
                 if (!user || !window.FB || !isAdminMode) return;
                 try {
-                    const { getDocs } = window.FB;
-                    const logsRef = colRef('logs');
-                    const snap = await getDocs(logsRef);
-                    let allLogs = snap.docs.map(d => ({id: d.id, ...d.data()}));
-                    allLogs.sort((a,b) => b.timestamp - a.timestamp);
-                    setRecentLogs(allLogs.slice(0, 50));
+                    const { getDocs, query, orderBy, limit } = window.FB;
+                    // 전체 로그 대신 최근 50건만 읽는다
+                    const snap = await getDocs(query(colRef('logs'), orderBy('timestamp', 'desc'), limit(50)));
+                    setRecentLogs(snap.docs.map(d => ({id: d.id, ...d.data()})));
                 } catch(e) { console.error("로그 불러오기 오류:", e); }
             }, [user, isAdminMode, colRef]);
 
@@ -1011,9 +1030,13 @@
                 if (!user || !window.FB) return;
                 try {
                     await window.FB.addDoc(colRef('logs'), {
-                        empId: sessionStorage.getItem('mr_emp_id') || empId, action: actionType, target: targetTitle, 
+                        empId: sessionStorage.getItem('mr_emp_id') || empId, action: actionType, target: targetTitle,
                         timestamp: Date.now(), dateString: new Date().toLocaleString('ko-KR')
                     });
+                    // 조회순 정렬용 집계 문서. 매번 전체 로그를 읽지 않도록 열람 시 1씩 올린다
+                    if (targetTitle && VIEW_ACTION.test(actionType)) {
+                        await window.FB.setDoc(docRef('stats', 'viewCounts'), { counts: { [targetTitle]: window.FB.increment(1) } }, { merge: true });
+                    }
                 } catch (e) { console.error(e); }
             };
 
@@ -1243,26 +1266,33 @@
                 return sorted;
             }, [messages, activeTab, searchQuery, selectedCategory, sortBy, viewCounts]);
 
-            // 조회순 정렬을 위해 기존 logs 컬렉션에서 열람 횟수를 집계 (필요할 때만 1회)
+            // 조회순 정렬: stats/viewCounts 집계 문서 1개만 읽는다 (필요할 때만 1회).
+            // 집계 문서가 아직 없으면 그때 한 번만 기존 logs 전체에서 계산해 만들어 둔다
             useEffect(() => {
                 if (sortBy !== "popular" || !user || !window.FB) return;
                 let alive = true;
                 (async () => {
                     try {
+                        const statsRef = docRef('stats', 'viewCounts');
+                        const statsSnap = await window.FB.getDoc(statsRef);
+                        if (statsSnap.exists() && statsSnap.data().backfilled) {
+                            if (alive) setViewCounts(statsSnap.data().counts || {});
+                            return;
+                        }
                         const snap = await window.FB.getDocs(colRef('logs'));
-                        if (!alive) return;
                         const counts = {};
                         snap.docs.forEach(d => {
                             const l = d.data();
-                            if (l && l.targetTitle && /열람|시청/.test(l.actionType || "")) {
-                                counts[l.targetTitle] = (counts[l.targetTitle] || 0) + 1;
+                            if (l && l.target && VIEW_ACTION.test(l.action || "")) {
+                                counts[l.target] = (counts[l.target] || 0) + 1;
                             }
                         });
-                        setViewCounts(counts);
+                        await window.FB.setDoc(statsRef, { counts, backfilled: true });
+                        if (alive) setViewCounts(counts);
                     } catch (e) { console.error("조회수 집계 오류:", e); }
                 })();
                 return () => { alive = false; };
-            }, [sortBy, user, colRef]);
+            }, [sortBy, user, colRef, docRef]);
 
             // 최근 7일 내 등록이면 NEW
             const isNew = useCallback((ts) => ts && (Date.now() - ts) < 7 * 24 * 60 * 60 * 1000, []);
