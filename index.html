@@ -66,7 +66,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, setDoc, getDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, where, orderBy, limit, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, addDoc as fsAddDoc, doc, setDoc as fsSetDoc, getDoc, onSnapshot, updateDoc as fsUpdateDoc, getDocs, getDocsFromCache, getDocsFromServer, deleteDoc as fsDeleteDoc, query, where, orderBy, limit, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         // PM님 파이어베이스 설정값
         const firebaseConfig = {
@@ -80,7 +80,21 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        const db = getFirestore(app);
+        // 읽은 문서를 브라우저(IndexedDB)에 보관해 두고, 자료가 안 바뀌었으면 서버 대신 여기서 읽는다
+        const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+
+        // 자료/분류/심포지엄 목록에 쓰면 해당 사업부 settings/config.contentVersion을 올린다.
+        // 접속자들은 이 값이 바뀌었을 때만 목록을 서버에서 다시 읽는다 (React 쪽 공용 목록 effect 참고)
+        const CONTENT_COLS = ['messages', 'categories', 'videoCategories', 'symposium_list'];
+        const bumpContentVersion = (ref) => {
+            // ref.path = artifacts/{appId}/public/data/{col}[/{id}]
+            const seg = ref.path.split('/');
+            if (seg[0] !== 'artifacts' || !CONTENT_COLS.includes(seg[4])) return;
+            return fsSetDoc(doc(db, 'artifacts', seg[1], 'public', 'data', 'settings', 'config'), { contentVersion: Date.now() }, { merge: true })
+                .catch(e => console.error('자료 버전 갱신 오류:', e));
+        };
+        const withBump = (fn) => async (ref, ...args) => { const r = await fn(ref, ...args); await bumpContentVersion(ref); return r; };
+        const addDoc = withBump(fsAddDoc), setDoc = withBump(fsSetDoc), updateDoc = withBump(fsUpdateDoc), deleteDoc = withBump(fsDeleteDoc);
         // DM팀 기존 데이터 공간. 이 값을 바꾸면 기존 자료가 보이지 않는다.
         const appId = "dm-team-mr-hub-v3";
         // 브랜드 설정(로고/색상/사업부 목록)만 담는 전역 공간. 사업부와 무관.
@@ -89,7 +103,7 @@
         // React에서 사용할 수 있도록 전역 창구 열기
         window.FB = {
             db, auth, appId, ROOT_ID,
-            collection, addDoc, doc, setDoc, getDoc, onSnapshot, updateDoc, getDocs, deleteDoc, query, where, orderBy, limit, increment,
+            collection, addDoc, doc, setDoc, getDoc, onSnapshot, updateDoc, getDocs, getDocsFromCache, getDocsFromServer, deleteDoc, query, where, orderBy, limit, increment,
             signInAnonymously, onAuthStateChanged
         };
         // React가 500ms 간격으로 폴링하며 기다리지 않도록 준비 완료를 알린다.
@@ -360,7 +374,7 @@
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect, useLayoutEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } = React;
 
         // --- SVG 아이콘 셋 ---
         const Icon = ({ name, size = 20, className = "" }) => {
@@ -756,7 +770,9 @@
             const [sortBy, setSortBy] = useState("recent");   // recent | name | popular
             const [dataLoading, setDataLoading] = useState(true);
             const [loadError, setLoadError] = useState(false);
-            const [viewCounts, setViewCounts] = useState({});  // 기존 logs 컬렉션에서 집계
+            const [viewCounts, setViewCounts] = useState({});  // stats/viewCounts 집계 문서
+            const [contentVersion, setContentVersion] = useState(null);  // { appId, ver } — settings/config.contentVersion
+            const loadedContentAppRef = useRef(null);
 
             // ===== 사업부별 데이터 공간 =====
             // 주의: DM팀은 기존 데이터가 전부 여기 있으므로 이 값을 절대 바꾸지 말 것.
@@ -945,33 +961,67 @@
                         setMrPassword("1111");
                         setNewMrPassword("1111");
                     }
+                    setContentVersion({ appId: activeAppId, ver: (docSnap.exists() && docSnap.data().contentVersion) || 0 });
                 });
 
-                // 공용 목록만 여기서 구독한다. 신청 내역은 아래 별도 effect에서 역할별로 구독
-                // (관리자 전환 때 공용 목록까지 전부 다시 읽지 않도록 isAdminMode에 의존하지 않음)
-                const listeners = [
-                    { col: 'messages', setter: setMessages, sortField: 'timestamp' },
-                    { col: 'symposium_list', setter: setSymposiumList, sortField: 'timestamp' },
-                    { col: 'categories', setter: setCategoriesList, sortField: 'order' },
-                    { col: 'videoCategories', setter: setVideoCategoriesList, sortField: 'order' }
-                ].map(item =>
-                    onSnapshot(colRef(item.col), (snap) => {
-                        let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                        if (item.sortField === 'order') {
-                            data.sort((a,b) => (a.order || 0) - (b.order || 0));
-                        } else {
-                            data.sort((a, b) => b.timestamp - a.timestamp);
-                        }
-                        item.setter(data);
-                        if (item.col === 'messages') { setDataLoading(false); setLoadError(false); }
-                    }, (err) => {
-                        console.error(`${item.col} 구독 오류:`, err);
-                        if (item.col === 'messages') { setDataLoading(false); setLoadError(true); }
-                    })
-                );
+                return () => unsubSettings();
+            }, [user, activeAppId, docRef]);
 
-                return () => { unsubSettings(); listeners.forEach(unsub => unsub()); };
-            }, [user, activeAppId, colRef, docRef]);
+            // 공용 목록(자료·분류·심포지엄): 실시간 구독 대신 contentVersion이 바뀌었을 때만 서버에서 읽는다.
+            // 버전이 같으면 브라우저 캐시에서 읽어 읽기 사용량이 들지 않는다. 6시간이 지나면 안전하게 서버에서 다시 읽음
+            useEffect(() => {
+                if (!user || !window.FB || !contentVersion || contentVersion.appId !== activeAppId) return;
+                const { getDocsFromCache, getDocsFromServer } = window.FB;
+                const cacheKey = `mrhub_content_${activeAppId}`;
+                let meta = null;
+                try { meta = JSON.parse(localStorage.getItem(cacheKey)); } catch (e) {}
+                const fresh = meta && meta.ver === contentVersion.ver && Date.now() - meta.at < 6 * 60 * 60 * 1000;
+                // 관리자가 여러 건을 연달아 고치면 버전이 연속으로 바뀐다. 첫 로딩이 아니면 3초 모았다가 한 번만 읽음
+                const isFirstLoad = loadedContentAppRef.current !== activeAppId;
+                loadedContentAppRef.current = activeAppId;
+                let alive = true;
+
+                const timer = setTimeout(async () => {
+                    const lists = [
+                        { col: 'messages', setter: setMessages, sortField: 'timestamp' },
+                        { col: 'symposium_list', setter: setSymposiumList, sortField: 'timestamp' },
+                        { col: 'categories', setter: setCategoriesList, sortField: 'order' },
+                        { col: 'videoCategories', setter: setVideoCategoriesList, sortField: 'order' }
+                    ];
+                    const counts = {};
+                    let fetched = false;
+                    for (const item of lists) {
+                        try {
+                            let snap = null;
+                            if (fresh) {
+                                try {
+                                    snap = await getDocsFromCache(colRef(item.col));
+                                    if (snap.size !== meta.counts?.[item.col]) snap = null; // 캐시가 비었거나 일부만 남은 경우
+                                } catch (e) { snap = null; }
+                            }
+                            if (!snap) { snap = await getDocsFromServer(colRef(item.col)); fetched = true; }
+                            if (!alive) return;
+                            counts[item.col] = snap.size;
+                            let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                            if (item.sortField === 'order') {
+                                data.sort((a,b) => (a.order || 0) - (b.order || 0));
+                            } else {
+                                data.sort((a, b) => b.timestamp - a.timestamp);
+                            }
+                            item.setter(data);
+                            if (item.col === 'messages') { setDataLoading(false); setLoadError(false); }
+                        } catch (err) {
+                            console.error(`${item.col} 불러오기 오류:`, err);
+                            if (item.col === 'messages') { setDataLoading(false); setLoadError(true); }
+                            return;
+                        }
+                    }
+                    if (fetched) {
+                        try { localStorage.setItem(cacheKey, JSON.stringify({ ver: contentVersion.ver, at: Date.now(), counts })); } catch (e) {}
+                    }
+                }, isFirstLoad ? 0 : 3000);
+                return () => { alive = false; clearTimeout(timer); };
+            }, [user, activeAppId, contentVersion, colRef]);
 
             // 신청 내역: 관리자는 전체, MR은 본인 사번 것만 읽는다 (읽기 사용량 절감)
             useEffect(() => {
