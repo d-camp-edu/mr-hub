@@ -5,7 +5,11 @@ import admin from "firebase-admin";
 import { chromium } from "playwright";
 
 const SITE = "http://erp.topstandard.co.kr";
-const APP_IDS = ["dm-team-mr-hub-v3", "onco-team-mr-hub-v3"]; // index.html의 사업부별 dataAppId
+// 사업부마다 탑스탠다드 계정이 따로 있다. appId는 index.html의 사업부별 dataAppId, 계정은 GitHub Secrets
+const TEAMS = [
+    { id: "dm", appId: "dm-team-mr-hub-v3", idVar: "SHIP_ID", pwVar: "SHIP_PW" },
+    { id: "onco", appId: "onco-team-mr-hub-v3", idVar: "SHIP_ONCO_ID", pwVar: "SHIP_ONCO_PW" },
+];
 const DRY_RUN = process.env.DRY_RUN !== "false";
 // 이 시각 이전 신청은 자동 발송하지 않는다 (기존에 수기로 처리한 건 보호). 자동화 시작일로 바꿀 것
 const SHIP_SINCE = new Date("2026-10-28T11:00:00+09:00").getTime();
@@ -29,12 +33,23 @@ const dataOf = (appId) => db.collection("artifacts").doc(appId).collection("publ
 
 mkdirSync("screenshots", { recursive: true });
 
-async function login(page) {
+async function login(page, team) {
     await page.goto(`${SITE}/member/login.php`);
-    await page.fill("#member_id", process.env.SHIP_ID);
-    await page.fill("#member_password", process.env.SHIP_PW);
+    await page.fill("#member_id", process.env[team.idVar]);
+    await page.fill("#member_password", process.env[team.pwVar]);
     await Promise.all([page.waitForLoadState("networkidle"), page.click("#frm input[type=image]")]);
-    if (page.url().includes("login.php")) throw new Error("로그인 실패 — 아이디/비밀번호 확인");
+    if (page.url().includes("login.php")) throw new Error(`[${team.id}] 로그인 실패 — ${team.idVar}/${team.pwVar} 확인`);
+}
+
+// 계정마다 쿠키가 섞이지 않게 새 컨텍스트에서 연다
+async function openPage(browser) {
+    const page = await (await browser.newContext()).newPage();
+    // 사이트의 alert은 닫고 기록만, "계속 등록하시겠습니까?" 같은 confirm은 취소
+    page.on("dialog", async (d) => {
+        console.log(`  [사이트 ${d.type()}] ${d.message().replace(/\s+/g, " ")}`);
+        await (d.type() === "confirm" ? d.dismiss() : d.accept());
+    });
+    return page;
 }
 
 // 브로셔 제목 → 관리자 화면에서 지정한 탑스탠다드 물품명 (messages 문서의 shipItemName).
@@ -142,12 +157,9 @@ function checkShipped(page, shipKey) {
 // 오늘(KST) 0시의 timestamp
 const todayStartKST = () => { const kst = Date.now() + 9 * 3600e3; return kst - (kst % DAY) - 9 * 3600e3; };
 
-async function countSentToday() {
-    let n = 0;
-    for (const appId of APP_IDS) {
-        n += (await dataOf(appId).collection("requests").where("shipSentAt", ">=", todayStartKST()).get()).size;
-    }
-    return n;
+// 하루 한도는 계정(사업부)별로 센다
+async function countSentToday(appId) {
+    return (await dataOf(appId).collection("requests").where("shipSentAt", ">=", todayStartKST()).get()).size;
 }
 
 // 안전장치에 걸리면 보류 사유, 아니면 null
@@ -173,28 +185,32 @@ async function main() {
         return;
     }
     const browser = await chromium.launch();
-    const page = await browser.newPage();
-    // 사이트의 alert은 닫고 기록만, "계속 등록하시겠습니까?" 같은 confirm은 취소
-    page.on("dialog", async (d) => {
-        console.log(`  [사이트 ${d.type()}] ${d.message().replace(/\s+/g, " ")}`);
-        await (d.type() === "confirm" ? d.dismiss() : d.accept());
-    });
+    let page;
     let failures = 0, newHolds = 0;
     try {
-        await login(page);
-        console.log(`로그인 성공 (DRY_RUN=${DRY_RUN})`);
-
-        // 시험 입력: "물품명|사무소" 로 가짜 신청 1건을 정보등록 직전까지만 넣어 보고 끝낸다
+        // 시험 입력: "물품명|사무소" 로 가짜 신청 1건을 정보등록 직전까지만 넣어 보고 끝낸다 (TEST_TEAM 계정으로)
         if (process.env.TEST_FILL) {
+            const team = TEAMS.find((t) => t.id === (process.env.TEST_TEAM || "dm"));
+            if (!team) throw new Error(`TEST_TEAM이 잘못됨: ${process.env.TEST_TEAM}`);
+            page = await openPage(browser);
+            await login(page, team);
             const [itemName, office] = process.env.TEST_FILL.split("|").map((s) => s.trim());
             await sendParcel(page, { requesterName: "테스트", phone: "010-0000-0000", quantity: 1, office }, itemName, { submit: false });
             await page.screenshot({ path: "screenshots/test-fill.png", fullPage: true });
-            console.log(`시험 입력 성공 (등록 안 함): ${itemName} 1부 → ${office}`);
+            console.log(`시험 입력 성공 (등록 안 함): [${team.id}] ${itemName} 1부 → ${office}`);
             return;
         }
 
-        let sentToday = await countSentToday();
-        for (const appId of APP_IDS) {
+        for (const team of TEAMS) {
+            const { appId } = team;
+            if (!process.env[team.idVar] || !process.env[team.pwVar]) {
+                console.log(`[${team.id}] 탑스탠다드 계정(${team.idVar}/${team.pwVar})이 없어 건너뜀`);
+                continue;
+            }
+            page = await openPage(browser);
+            await login(page, team);
+            console.log(`[${team.id}] 로그인 성공 (DRY_RUN=${DRY_RUN})`);
+            let sentToday = await countSentToday(appId);
             const itemNames = await loadItemNames(appId);
             const snap = await dataOf(appId).collection("requests").where("completed", "==", false).get();
             for (const doc of snap.docs) {
@@ -239,9 +255,10 @@ async function main() {
                     await page.screenshot({ path: `screenshots/${doc.id}.png`, fullPage: true }).catch(() => {});
                 }
             }
+            await page.context().close();
         }
     } catch (e) {
-        await page.screenshot({ path: "screenshots/error.png", fullPage: true }).catch(() => {});
+        await page?.screenshot({ path: "screenshots/error.png", fullPage: true }).catch(() => {});
         throw e;
     } finally {
         await browser.close();

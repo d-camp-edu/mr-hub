@@ -12,6 +12,9 @@ on:
       test_fill:
         description: "시험 입력 '물품명|사무소' (예: 듀비에 당뇨수첩(32P)|강남사무소 5층) — 정보등록 직전까지만 하고 끝남"
         default: ""
+      test_team:
+        description: "시험 입력에 쓸 계정: dm 또는 onco"
+        default: "dm"
 
 concurrency:
   group: brochure-shipping
@@ -38,10 +41,13 @@ jobs:
         env:
           SHIP_ID: ${{ secrets.SHIP_ID }}
           SHIP_PW: ${{ secrets.SHIP_PW }}
+          SHIP_ONCO_ID: ${{ secrets.SHIP_ONCO_ID }}
+          SHIP_ONCO_PW: ${{ secrets.SHIP_ONCO_PW }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           # 예약 실행은 실제 발송, 수동 실행은 입력값을 따름
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
           TEST_FILL: ${{ inputs.test_fill }}
+          TEST_TEAM: ${{ inputs.test_team }}
 
       # 실패했거나 시험 입력이면 화면을 받아볼 수 있게 스크린샷 보관
       - if: failure() || inputs.test_fill != ''
