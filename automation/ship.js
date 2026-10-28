@@ -89,16 +89,14 @@ async function sendParcel(page, req, itemName, { submit }) {
         const boxes = [...document.querySelectorAll('[class*="addr-chk-item"]')];
         return boxes.length > 0 && boxes.every((b) => decodeURIComponent(b.dataset.name || "").includes(office.split(" ")[0]));
     }, req.office);
-    const picked = await page.evaluate(({ office, hint }) => {
-        const boxes = [...document.querySelectorAll('[class*="addr-chk-item"]')]
-            .filter((b) => decodeURIComponent(b.dataset.name || "") === office)
-            .filter((b) => !hint || decodeURIComponent(b.dataset.add1 || "").includes(hint));
-        if (boxes.length !== 1) return boxes.length;
-        boxes[0].checked = true;
-        return 1;
-    }, { office: req.office, hint: OFFICE_ADDR_HINT[req.office] });
-    if (picked !== 1) throw new Error(`주소록에서 "${req.office}"를 하나로 특정하지 못함 (${picked}건)`);
-    await page.locator('input[onclick^="addr_select_done"]').click();
+    await page.waitForLoadState("networkidle");
+    const keys = await page.evaluate(({ office, hint }) => [...document.querySelectorAll('[class*="addr-chk-item"]')]
+        .filter((b) => b.offsetParent !== null && decodeURIComponent(b.dataset.name || "") === office)
+        .filter((b) => !hint || decodeURIComponent(b.dataset.add1 || "").includes(hint))
+        .map((b) => b.dataset.key), { office: req.office, hint: OFFICE_ADDR_HINT[req.office] });
+    if (keys.length !== 1) throw new Error(`주소록에서 "${req.office}"를 하나로 특정하지 못함 (${keys.length}건)`);
+    await page.locator(`[class*="addr-chk-item"][data-key="${keys[0]}"]:visible`).check();
+    await page.locator('input[onclick^="addr_select_done"]:visible').click();
     if (!(await form.locator('input[name="tgoai_add1[1]"]').inputValue())) throw new Error("사무소 주소가 채워지지 않음");
 
     // 4) 수취인·전화번호는 사무소 대신 신청자로, 메모에 출고 물품
