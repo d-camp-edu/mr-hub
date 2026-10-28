@@ -16,7 +16,8 @@ const STEP_SHIPPED = "2"; // 사이트 주문단계: 0 신청, 1 접수, 2 출�
 const SCHEDULE_START = new Date("2026-10-29T00:00:00+09:00").getTime();
 // 택배비 안전장치: 걸리면 발송하지 않고 '보류' 표시 → 관리자가 신청 내역에서 '발송 승인'해야 나간다
 const LIMITS = {
-    maxQty: 100,   // 1건 수량이 이보다 많으면 보류
+    maxQty: 100,   // 1건 수량이 이보다 많으면 보류 (품목별 예외는 maxQtyByItem)
+    maxQtyByItem: { "듀비에 당뇨수첩(32P)": 300 }, // 탑스탠다드 물품명 기준
     maxPerDay: 10, // 하루(KST) 등록 건수가 이만큼 차면 이후 신청은 보류
     dupDays: 7,    // 같은 사람이 같은 품목을 이 기간 안에 또 신청하면 보류
 };
@@ -150,8 +151,9 @@ async function countSentToday() {
 }
 
 // 안전장치에 걸리면 보류 사유, 아니면 null
-async function holdReason(appId, doc, req, sentToday) {
-    if (Number(req.quantity) > LIMITS.maxQty) return `수량 ${req.quantity}부 (1건 한도 ${LIMITS.maxQty}부 초과)`;
+async function holdReason(appId, doc, req, itemName, sentToday) {
+    const maxQty = LIMITS.maxQtyByItem[itemName] ?? LIMITS.maxQty;
+    if (Number(req.quantity) > maxQty) return `수량 ${req.quantity}부 (1건 한도 ${maxQty}부 초과)`;
     if (sentToday >= LIMITS.maxPerDay) return `오늘 이미 ${sentToday}건 등록 (하루 한도 ${LIMITS.maxPerDay}건)`;
     const mine = req.empId
         ? dataOf(appId).collection("requests").where("empId", "==", req.empId)
@@ -202,8 +204,10 @@ async function main() {
                     // 1) 아직 안 보낸 신청 → 사이트에 물품신청. 등록 직후 바로 기록해서 중복 발송을 막는다
                     if (!req.shipOrderNo) {
                         if ((req.timestamp || 0) < SHIP_SINCE) continue;
+                        const itemName = itemNames.get(req.brochureName);
+                        if (!itemName) throw new Error(`"${req.brochureName}"에 탑스탠다드 물품명이 지정되지 않음 (관리자 > 브로셔 품목)`);
                         if (!req.shipApproved) {
-                            const reason = await holdReason(appId, doc, req, sentToday);
+                            const reason = await holdReason(appId, doc, req, itemName, sentToday);
                             if (reason) {
                                 // 새로 보류된 건만 실패로 세서 알림 메일이 한 번만 가게 한다
                                 if (req.shipHold !== reason) {
@@ -214,8 +218,6 @@ async function main() {
                                 continue;
                             }
                         }
-                        const itemName = itemNames.get(req.brochureName);
-                        if (!itemName) throw new Error(`"${req.brochureName}"에 탑스탠다드 물품명이 지정되지 않음 (관리자 > 브로셔 품목)`);
                         const result = await sendParcel(page, req, itemName, { submit: !DRY_RUN });
                         if (!result) { console.log(`(DRY_RUN) 정보등록 직전까지 확인 완료: ${label}`); continue; }
                         await doc.ref.update({ shipOrderNo: result.orderNo, shipKey: result.shipKey, shipSentAt: Date.now() });
