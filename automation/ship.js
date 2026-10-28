@@ -82,6 +82,9 @@ async function sendParcel(page, req, itemName, { submit }) {
 
     // 3) 주소록에서 사무소 검색·선택 → 사무소 주소가 채워진다
     await form.locator("#add_in_1").click();
+    // 팝업이 처음 불러오는 전체 목록이 늦게 오면 검색 결과를 덮어쓰므로, 다 뜬 뒤에 검색한다
+    await page.locator('[class*="addr-chk-item"]:visible').first().waitFor();
+    await page.waitForLoadState("networkidle");
     const keyword = page.locator('input[placeholder="이름/메일/주소 검색"]');
     await keyword.fill(req.office);
     await keyword.press("Enter");
