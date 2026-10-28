@@ -56,7 +56,8 @@ function findItem(page, itemName) {
 // 사이트가 순서를 강제한다: 배송방법 → 출고물품 → 주소록 → 수취인 덮어쓰기 → 정보등록
 async function sendParcel(page, req, itemName, { submit }) {
     await page.goto(`${SITE}/main/index.php`);
-    await page.evaluate(() => window.get_page("/distribution/goods_ask_write.php"));
+    // 메인의 공지 팝업(.popup_drag)이 버튼 클릭을 가리므로 치운다
+    await page.evaluate(() => { document.querySelectorAll(".popup_drag").forEach((p) => p.remove()); window.get_page("/distribution/goods_ask_write.php"); });
     const form = page.locator('form[id^="frm1_"]');
     await form.locator('select[name="tgoai_send[1]"]').waitFor();
 
