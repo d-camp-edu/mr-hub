@@ -10,6 +10,9 @@ on:
       dry_run:
         description: "true면 사이트에 실제로 등록하지 않고 확인만 함"
         default: "true"
+      test_fill:
+        description: "시험 입력 '물품명|사무소' (예: 듀비에 당뇨수첩(32P)|강남사무소 5층) — 정보등록 직전까지만 하고 끝남"
+        default: ""
 
 concurrency:
   group: brochure-shipping
@@ -39,9 +42,10 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           # 예약 실행은 실제 발송, 수동 실행은 입력값을 따름
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          TEST_FILL: ${{ inputs.test_fill }}
 
-      # 실패 시 마지막 화면을 받아볼 수 있게 스크린샷 보관
-      - if: failure()
+      # 실패했거나 시험 입력이면 화면을 받아볼 수 있게 스크린샷 보관
+      - if: failure() || inputs.test_fill != ''
         uses: actions/upload-artifact@v4
         with:
           name: screenshots

@@ -702,6 +702,8 @@
             const [newSymposiumName, setNewSymposiumName] = useState("");
             const [newSympAgendaBase64, setNewSympAgendaBase64] = useState("");
             const [newBrochureName, setNewBrochureName] = useState("");
+            // 브로셔 수령 사무소 = 탑스탠다드 주소록 이름 그대로 (automation/ship.js가 이 이름으로 주소록을 검색)
+            const SHIP_OFFICES = ["강남사무소 5층", "강릉사무소", "강북사무소", "강원사무소(강릉)", "강원사무소(원주)", "경기1사무소", "경기2사무소", "경남사무소", "경북1사무소", "경북2사무소", "부산1사무소", "서부사무소", "원주사무소", "인천사무소", "전남사무소", "전북사무소", "제주사무소", "중부사무소", "충남사무소", "충북사무소"];
             
             const [quizSettingForm, setQuizSettingForm] = useState({ question: "", isActive: true });
             
@@ -2083,10 +2085,17 @@
                                         </div>
                                         <div className="bg-surface rounded-lg border overflow-hidden shadow-sm">
                                             <div className="p-4 bg-surface-2 border-b font-bold text-caption text-fg-subtle">등록된 신청 품목</div>
-                                            <div className="divide-y max-h-[200px] overflow-y-auto custom-scrollbar">
+                                            <div className="divide-y max-h-[360px] overflow-y-auto custom-scrollbar">
                                                 {messages.filter(m => m.category === "제품 브로슈어").map(item => (
-                                                    <div key={item.id} className="p-4 flex justify-between items-center text-left">
-                                                        <span className="font-bold text-sm text-fg">{item.title}</span>
+                                                    <div key={item.id} className="p-4 flex gap-2 justify-between items-center text-left">
+                                                        <div className="flex-1 min-w-0 space-y-1">
+                                                            <span className="font-bold text-sm text-fg">{item.title}</span>
+                                                            {/* 자동 발송용: 탑스탠다드 물품신청 화면의 물품명과 글자 그대로 같아야 함 */}
+                                                            <input className="w-full p-2 bg-surface-2 border border-line rounded-md text-caption outline-none focus:border-blue-500"
+                                                                   placeholder="탑스탠다드 물품명 (예: 듀비에 당뇨수첩(32P))" aria-label={`${item.title} 탑스탠다드 물품명`}
+                                                                   defaultValue={item.shipItemName || ""}
+                                                                   onBlur={async e => { const v = e.target.value.trim(); if (v === (item.shipItemName || "")) return; await window.FB.updateDoc(docRef('messages', item.id), { shipItemName: v }); toast("물품명이 저장되었습니다.", "success"); }} />
+                                                        </div>
                                                         <button onClick={async () => { if (await askConfirm(`"${item.title}" 항목을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) { await window.FB.deleteDoc(docRef('messages', item.id)); toast("삭제되었습니다.", "success"); } }} className="tap-icon p-2 text-fg-subtle hover:text-danger" aria-label="삭제"><Icon name="trash" size={18} aria-hidden="true"/></button>
                                                     </div>
                                                 ))}
@@ -2522,9 +2531,14 @@
                                                                autoComplete="tel"
                                                                value={requestForm.phone}
                                                                onChange={e=>setRequestForm({...requestForm, phone: e.target.value})} />
-                                                    <TextField id="br-office" label="수령 사무소명" required
-                                                               value={requestForm.office}
-                                                               onChange={e=>setRequestForm({...requestForm, office: e.target.value})} />
+                                                    <Field id="br-office" label="수령 사무소" required>
+                                                        <select id="br-office" required className={inputCls} style={inputStyle}
+                                                                value={SHIP_OFFICES.includes(requestForm.office) ? requestForm.office : ""}
+                                                                onChange={e=>setRequestForm({...requestForm, office: e.target.value})}>
+                                                            <option value="" disabled hidden>사무소를 선택하세요</option>
+                                                            {SHIP_OFFICES.map(o => <option key={o} value={o}>{o}</option>)}
+                                                        </select>
+                                                    </Field>
                                                 </FormSection>
 
                                                 <button className="w-full rounded-md bg-primary text-on-primary font-bold text-label inline-flex items-center justify-center gap-2 hover:bg-primary-hover transition-colors"
