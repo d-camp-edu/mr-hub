@@ -85,11 +85,10 @@ async function sendParcel(page, req, itemName, { submit }) {
     const keyword = page.locator('input[placeholder="이름/메일/주소 검색"]');
     await keyword.fill(req.office);
     await keyword.press("Enter");
-    await page.waitForFunction((office) => {
-        const boxes = [...document.querySelectorAll('[class*="addr-chk-item"]')];
-        return boxes.length > 0 && boxes.every((b) => decodeURIComponent(b.dataset.name || "").includes(office.split(" ")[0]));
-    }, req.office);
     await page.waitForLoadState("networkidle");
+    // 검색 결과에는 주소만 겹치는 다른 항목도 섞여 나오므로 이름이 정확히 같은 항목이 보일 때까지 기다린다
+    await page.waitForFunction((office) => [...document.querySelectorAll('[class*="addr-chk-item"]')]
+        .some((b) => b.offsetParent !== null && decodeURIComponent(b.dataset.name || "") === office), req.office);
     const keys = await page.evaluate(({ office, hint }) => [...document.querySelectorAll('[class*="addr-chk-item"]')]
         .filter((b) => b.offsetParent !== null && decodeURIComponent(b.dataset.name || "") === office)
         .filter((b) => !hint || decodeURIComponent(b.dataset.add1 || "").includes(hint))
