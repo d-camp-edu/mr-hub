@@ -8,7 +8,7 @@ const SITE = "http://erp.topstandard.co.kr";
 const APP_IDS = ["dm-team-mr-hub-v3", "onco-team-mr-hub-v3"]; // index.html의 사업부별 dataAppId
 const DRY_RUN = process.env.DRY_RUN !== "false";
 // 이 시각 이전 신청은 자동 발송하지 않는다 (기존에 수기로 처리한 건 보호). 자동화 시작일로 바꿀 것
-const SHIP_SINCE = new Date("2026-11-01T00:00:00+09:00").getTime();
+const SHIP_SINCE = new Date("2026-10-28T11:00:00+09:00").getTime();
 // 주소록에 같은 이름이 여러 개인 사무소 → 주소(add1)에 이 글자가 있는 쪽을 고른다
 const OFFICE_ADDR_HINT = { "제주사무소": "제주특별자치도" };
 const STEP_SHIPPED = "2"; // 사이트 주문단계: 0 신청, 1 접수, 2 출고
