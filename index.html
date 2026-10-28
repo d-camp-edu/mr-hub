@@ -2110,6 +2110,14 @@
                                                         <div className="flex-1 min-w-0">
                                                             <p className={`text-sm font-bold mt-1 truncate ${item.completed ? 'line-through text-fg-subtle' : 'text-fg'}`}>{item.brochureName} ({item.quantity}부)</p>
                                                             <p className="text-caption text-fg-muted">{item.accountName} | {item.requesterName}({item.empId}) | {item.phone}</p>
+                                                            {item.shipOrderNo && <p className="text-caption text-fg-subtle">탑스탠다드 {item.shipOrderNo}</p>}
+                                                            {item.shipHold && !item.shipApproved && !item.shipOrderNo && (
+                                                                <p className="text-caption text-danger font-bold flex items-center gap-2 flex-wrap">
+                                                                    자동 발송 보류: {item.shipHold}
+                                                                    <button onClick={async () => { if (await askConfirm(`"${item.brochureName} ${item.quantity}부" 자동 발송을 승인할까요? 다음 정각에 탑스탠다드에 등록됩니다.`)) { await window.FB.updateDoc(docRef('requests', item.id), { shipApproved: true }); toast("승인되었습니다.", "success"); } }}
+                                                                            className="px-2 py-1 rounded-md bg-primary text-white text-caption font-bold">발송 승인</button>
+                                                                </p>
+                                                            )}
                                                         </div>
                                                         <button onClick={() => deleteItem('requests', item.id)} className="tap-icon text-danger shrink-0" aria-label="삭제"><Icon name="trash" size={16} aria-hidden="true"/></button>
                                                     </div>

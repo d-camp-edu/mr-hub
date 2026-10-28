@@ -12,6 +12,15 @@ const SHIP_SINCE = new Date("2026-10-28T11:00:00+09:00").getTime();
 // 주소록에 같은 이름이 여러 개인 사무소 → 주소(add1)에 이 글자가 있는 쪽을 고른다
 const OFFICE_ADDR_HINT = { "제주사무소": "제주특별자치도" };
 const STEP_SHIPPED = "2"; // 사이트 주문단계: 0 신청, 1 접수, 2 출고
+// 예약 실행은 이 시각부터 동작 (그 전 신청은 이때 한꺼번에 처리). 수동 실행은 상관없음
+const SCHEDULE_START = new Date("2026-10-29T00:00:00+09:00").getTime();
+// 택배비 안전장치: 걸리면 발송하지 않고 '보류' 표시 → 관리자가 신청 내역에서 '발송 승인'해야 나간다
+const LIMITS = {
+    maxQty: 100,   // 1건 수량이 이보다 많으면 보류
+    maxPerDay: 10, // 하루(KST) 등록 건수가 이만큼 차면 이후 신청은 보류
+    dupDays: 7,    // 같은 사람이 같은 품목을 이 기간 안에 또 신청하면 보류
+};
+const DAY = 24 * 60 * 60 * 1000;
 
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
 const db = admin.firestore();
@@ -129,7 +138,38 @@ function checkShipped(page, shipKey) {
     }, shipKey);
 }
 
+// 오늘(KST) 0시의 timestamp
+const todayStartKST = () => { const kst = Date.now() + 9 * 3600e3; return kst - (kst % DAY) - 9 * 3600e3; };
+
+async function countSentToday() {
+    let n = 0;
+    for (const appId of APP_IDS) {
+        n += (await dataOf(appId).collection("requests").where("shipSentAt", ">=", todayStartKST()).get()).size;
+    }
+    return n;
+}
+
+// 안전장치에 걸리면 보류 사유, 아니면 null
+async function holdReason(appId, doc, req, sentToday) {
+    if (Number(req.quantity) > LIMITS.maxQty) return `수량 ${req.quantity}부 (1건 한도 ${LIMITS.maxQty}부 초과)`;
+    if (sentToday >= LIMITS.maxPerDay) return `오늘 이미 ${sentToday}건 등록 (하루 한도 ${LIMITS.maxPerDay}건)`;
+    const mine = req.empId
+        ? dataOf(appId).collection("requests").where("empId", "==", req.empId)
+        : dataOf(appId).collection("requests").where("requesterName", "==", req.requesterName);
+    const dup = (await mine.get()).docs.find((d) => {
+        const o = d.data();
+        return d.id !== doc.id && o.brochureName === req.brochureName
+            && (o.timestamp || 0) < (req.timestamp || 0) && req.timestamp - o.timestamp < LIMITS.dupDays * DAY;
+    });
+    if (dup) return `${LIMITS.dupDays}일 안에 같은 품목을 이미 신청함 (${dup.data().dateString})`;
+    return null;
+}
+
 async function main() {
+    if (process.env.GITHUB_EVENT_NAME === "schedule" && Date.now() < SCHEDULE_START) {
+        console.log(`예약 실행은 ${new Date(SCHEDULE_START).toISOString()} 부터 — 이번엔 건너뜀`);
+        return;
+    }
     const browser = await chromium.launch();
     const page = await browser.newPage();
     // 사이트의 alert은 닫고 기록만, "계속 등록하시겠습니까?" 같은 confirm은 취소
@@ -137,7 +177,7 @@ async function main() {
         console.log(`  [사이트 ${d.type()}] ${d.message().replace(/\s+/g, " ")}`);
         await (d.type() === "confirm" ? d.dismiss() : d.accept());
     });
-    let failures = 0;
+    let failures = 0, newHolds = 0;
     try {
         await login(page);
         console.log(`로그인 성공 (DRY_RUN=${DRY_RUN})`);
@@ -151,6 +191,7 @@ async function main() {
             return;
         }
 
+        let sentToday = await countSentToday();
         for (const appId of APP_IDS) {
             const itemNames = await loadItemNames(appId);
             const snap = await dataOf(appId).collection("requests").where("completed", "==", false).get();
@@ -161,11 +202,24 @@ async function main() {
                     // 1) 아직 안 보낸 신청 → 사이트에 물품신청. 등록 직후 바로 기록해서 중복 발송을 막는다
                     if (!req.shipOrderNo) {
                         if ((req.timestamp || 0) < SHIP_SINCE) continue;
+                        if (!req.shipApproved) {
+                            const reason = await holdReason(appId, doc, req, sentToday);
+                            if (reason) {
+                                // 새로 보류된 건만 실패로 세서 알림 메일이 한 번만 가게 한다
+                                if (req.shipHold !== reason) {
+                                    if (!DRY_RUN) await doc.ref.update({ shipHold: reason });
+                                    newHolds++;
+                                }
+                                console.log(`보류: ${label} — ${reason}`);
+                                continue;
+                            }
+                        }
                         const itemName = itemNames.get(req.brochureName);
                         if (!itemName) throw new Error(`"${req.brochureName}"에 탑스탠다드 물품명이 지정되지 않음 (관리자 > 브로셔 품목)`);
                         const result = await sendParcel(page, req, itemName, { submit: !DRY_RUN });
                         if (!result) { console.log(`(DRY_RUN) 정보등록 직전까지 확인 완료: ${label}`); continue; }
                         await doc.ref.update({ shipOrderNo: result.orderNo, shipKey: result.shipKey, shipSentAt: Date.now() });
+                        sentToday++;
                         console.log(`물품신청 등록: ${label} → ${result.orderNo}`);
                         continue;
                     }
@@ -190,7 +244,7 @@ async function main() {
     } finally {
         await browser.close();
     }
-    if (failures) throw new Error(`${failures}건 실패 — 위 로그와 screenshots 확인`);
+    if (failures || newHolds) throw new Error(`실패 ${failures}건, 새로 보류 ${newHolds}건 — 위 로그 확인 (보류는 관리자 > 브로셔 신청 내역에서 '발송 승인')`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
