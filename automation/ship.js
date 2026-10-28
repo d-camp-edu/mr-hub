@@ -27,10 +27,11 @@ async function login(page) {
     if (page.url().includes("login.php")) throw new Error("로그인 실패 — 아이디/비밀번호 확인");
 }
 
-// 브로셔 제목 → 관리자 화면에서 지정한 탑스탠다드 물품명 (messages 문서의 shipItemName)
+// 브로셔 제목 → 관리자 화면에서 지정한 탑스탠다드 물품명 (messages 문서의 shipItemName).
+// 비어 있으면 제목을 그대로 사이트 물품명으로 쓴다 (제목을 사이트 이름과 똑같이 지은 경우)
 async function loadItemNames(appId) {
     const snap = await dataOf(appId).collection("messages").where("category", "==", "제품 브로슈어").get();
-    return new Map(snap.docs.map((d) => [d.data().title, (d.data().shipItemName || "").trim()]));
+    return new Map(snap.docs.map((d) => [d.data().title, (d.data().shipItemName || "").trim() || d.data().title]));
 }
 
 // 사이트 물품명으로 제품 키(gsKey)·물품 키(tgKey)·재고를 찾는다
