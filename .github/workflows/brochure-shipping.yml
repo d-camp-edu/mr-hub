@@ -2,8 +2,8 @@ name: 브로셔 택배 자동 발송
 
 on:
   schedule:
-    # UTC 기준. 평일 KST 09:00~18:00 매시 정각 (= UTC 00:00~09:00). 시작 시각은 ship.js의 SCHEDULE_START
-    - cron: "0 0-9 * * 1-5"
+    # UTC 기준. 평일 KST 09:17~18:17 매시 17분 (= UTC 00:17~09:17). 정각은 GitHub 예약이 몰려 지연·누락돼서 피함. 시작 시각은 ship.js의 SCHEDULE_START
+    - cron: "17 0-9 * * 1-5"
   workflow_dispatch:
     inputs:
       dry_run:
