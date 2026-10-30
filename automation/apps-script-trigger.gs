@@ -1,4 +1,4 @@
-// 브로셔 택배 자동 발송 — 평일 KST 09~18시 매시 GitHub Actions 실행 요청
+// 브로셔 택배 자동 발송 — 평일 KST 10시대에 하루 한 번 GitHub Actions 실행 요청
 // GitHub 예약(schedule)이 자주 누락돼서 Apps Script 시간 트리거로 대신 깨움.
 // 스크립트 속성에 GITHUB_TOKEN 을 넣어야 함 (프로젝트 설정 > 스크립트 속성).
 
@@ -8,8 +8,7 @@ const WORKFLOW = "brochure-shipping.yml";
 function runShipping() {
   const now = new Date();
   const day = Number(Utilities.formatDate(now, "Asia/Seoul", "u")); // 1=월 ~ 7=일
-  const hour = Number(Utilities.formatDate(now, "Asia/Seoul", "H"));
-  if (day > 5 || hour < 9 || hour > 18) return;
+  if (day > 5) return;
 
   const token = PropertiesService.getScriptProperties().getProperty("GITHUB_TOKEN");
   const res = UrlFetchApp.fetch(
@@ -31,8 +30,8 @@ function runShipping() {
   }
 }
 
-// 처음 한 번만 실행: 매시 트리거 생성
+// 처음 한 번만 실행 (주기를 바꿨으면 다시 실행): 기존 트리거를 지우고 매일 KST 10시대 트리거 생성
 function setupTrigger() {
   ScriptApp.getProjectTriggers().forEach((t) => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger("runShipping").timeBased().everyHours(1).create();
+  ScriptApp.newTrigger("runShipping").timeBased().everyDays(1).atHour(10).inTimezone("Asia/Seoul").create();
 }

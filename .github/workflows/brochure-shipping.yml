@@ -1,9 +1,8 @@
 name: 브로셔 택배 자동 발송
 
 on:
-  schedule:
-    # UTC 기준. 평일 KST 09:17~18:17 매시 17분 (= UTC 00:17~09:17). 정각은 GitHub 예약이 몰려 지연·누락돼서 피함. 시작 시각은 ship.js의 SCHEDULE_START
-    - cron: "17 0-9 * * 1-5"
+  # 정기 실행은 Apps Script 시간 트리거가 평일 하루 한 번 깨운다 (automation/apps-script-trigger.gs).
+  # GitHub 예약(schedule)은 누락이 잦고, 같이 켜 두면 두 번 돌아서 뺐다
   workflow_dispatch:
     inputs:
       dry_run:
